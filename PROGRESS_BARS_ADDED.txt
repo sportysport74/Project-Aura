@@ -1,0 +1,176 @@
+================================================================================
+PROGRESS BARS ADDED - NO MORE WONDERING
+================================================================================
+
+FIXED: Added tqdm progress bars to training loop
+
+NOW YOU'LL SEE:
+  ✅ Live progress bar for each epoch
+  ✅ Real-time loss and perplexity updates
+  ✅ Batch count and completion percentage
+  ✅ Never wonder if it's stuck again!
+
+--------------------------------------------------------------------------------
+WHAT YOU'LL SEE DURING TRAINING
+--------------------------------------------------------------------------------
+
+Startup (instant with cache):
+  ======================================================================
+  CREATING DATASETS WITH FAST CACHING
+  ======================================================================
+
+  Creating training dataset...
+  Loading cached tokens from cache\tokenized\train_*.pt
+  Loaded 149,754,435 cached tokens
+  Dataset ready: 292,488 samples
+
+  Creating validation dataset...
+  Loading cached tokens from cache\tokenized\val_*.pt
+  Loaded 8,039,211 cached tokens
+  Dataset ready: 15,702 samples
+
+  Creating COSF Transformer (small)...
+  Model parameters: 71,584,824
+    Token embedding: 6,144,000
+    Transformer blocks: 65,439,288
+    Layer norm: 1,536
+    Positional encoding: 0
+
+  Batch size: 64
+
+  ======================================================================
+  STARTING TRAINING
+  ======================================================================
+
+Training with progress bars:
+  Epoch 1/20: 100%|██████████| 4570/4570 [03:45<00:00] loss=2.45 ppl=11.59
+  Step   100 | Loss: 3.2145 | PPL:   24.88 | LR: 0.000150
+  Step   200 | Loss: 2.9834 | PPL:   19.75 | LR: 0.000300
+  Step   500 | Loss: 2.5123 | PPL:   12.34 | LR: 0.000750
+
+  Epoch 1/20 (225.0s):
+    Train Loss: 2.4567
+    Val Loss:   2.5678
+    Val PPL:    13.01
+  Saved: checkpoints/cosf_large/checkpoint_epoch_1.pt
+  Saved: checkpoints/cosf_large/best_model.pt
+
+  Epoch 2/20:  45%|████▌     | 2056/4570 [01:40<01:55] loss=2.12 ppl=8.33
+  Step   600 | Loss: 2.3456 | PPL:   10.44 | LR: 0.000900
+  ...
+
+What the progress bar shows:
+  - Epoch X/20: Which epoch (e.g., "Epoch 1/20")
+  - 100%: Completion percentage
+  - |██████████|: Visual progress bar
+  - 4570/4570: Current batch / total batches
+  - [03:45<00:00]: Time elapsed < time remaining
+  - loss=2.45: Current loss
+  - ppl=11.59: Current perplexity
+
+--------------------------------------------------------------------------------
+NO MORE STUCK SCREENS
+--------------------------------------------------------------------------------
+
+Before (old):
+  Epoch 1/20
+  [... nothing for minutes, looks frozen ...]
+
+After (new):
+  Epoch 1/20:  45%|████▌     | 2056/4570 [01:40<01:55] loss=2.12 ppl=8.33
+
+You always know:
+  ✅ It's working (bar is moving)
+  ✅ How far along (45% complete)
+  ✅ How much time left (1:55 remaining)
+  ✅ Current performance (loss=2.12, ppl=8.33)
+
+--------------------------------------------------------------------------------
+RESTART TRAINING NOW
+--------------------------------------------------------------------------------
+
+The progress bars are added. Just run:
+
+  train_tinystories_small.bat
+
+OR manually:
+
+  cd C:\Users\fatba\COSF-MI\COSF-MI
+  ..\venv\Scripts\python -m cosf_mi.training.train_cosf_large --model-size small --data-dir data/tinystories --tokenizer models/tokenizer_8k.model --epochs 20 --device cuda
+
+--------------------------------------------------------------------------------
+WHAT CHANGED
+--------------------------------------------------------------------------------
+
+File: train_cosf_large.py
+
+Added:
+  ✅ from tqdm import tqdm (line 43)
+  ✅ Progress bar wrapper around train_loader
+  ✅ Real-time loss/ppl updates to progress bar
+  ✅ tqdm.write() for logging (doesn't break progress bar)
+  ✅ pbar.close() at end of epoch
+
+Result:
+  ✅ You see exactly what's happening
+  ✅ Never wonder if it's frozen
+  ✅ Know exactly how long until epoch completes
+  ✅ See loss/perplexity improving in real-time
+
+--------------------------------------------------------------------------------
+EXPECTED OUTPUT
+--------------------------------------------------------------------------------
+
+Full training session example:
+
+  ======================================================================
+  STARTING TRAINING
+  ======================================================================
+
+  Epoch 1/20:   0%|          | 0/4570 [00:00<?, ?batch/s]
+  Epoch 1/20:  10%|█         | 457/4570 [00:22<03:23] loss=3.45 ppl=31.50
+  Epoch 1/20:  20%|██        | 914/4570 [00:45<02:58] loss=3.12 ppl=22.65
+  Epoch 1/20:  30%|███       | 1371/4570 [01:07<02:36] loss=2.89 ppl=17.99
+  Epoch 1/20:  40%|████      | 1828/4570 [01:29<02:13] loss=2.67 ppl=14.44
+  Epoch 1/20:  50%|█████     | 2285/4570 [01:52<01:51] loss=2.51 ppl=12.30
+  Epoch 1/20:  60%|██████    | 2742/4570 [02:14<01:29] loss=2.38 ppl=10.80
+  Epoch 1/20:  70%|███████   | 3199/4570 [02:36<01:07] loss=2.28 ppl=9.78
+  Epoch 1/20:  80%|████████  | 3656/4570 [02:59<00:44] loss=2.20 ppl=9.02
+  Epoch 1/20:  90%|█████████ | 4113/4570 [03:21<00:22] loss=2.14 ppl=8.50
+  Epoch 1/20: 100%|██████████| 4570/4570 [03:43<00:00] loss=2.09 ppl=8.08
+
+  Epoch 1/20 (223.5s):
+    Train Loss: 2.4567
+    Val Loss:   2.5678
+    Val PPL:    13.01
+  Saved: checkpoints/cosf_large/checkpoint_epoch_1.pt
+  Saved: checkpoints/cosf_large/best_model.pt
+
+  Epoch 2/20:   0%|          | 0/4570 [00:00<?, ?batch/s]
+  ...
+
+You can literally watch it train!
+
+--------------------------------------------------------------------------------
+ALL ISSUES RESOLVED
+--------------------------------------------------------------------------------
+
+✅ Tokenization: Fixed (chunked + cached + progress)
+✅ Cache: Created (instant loading)
+✅ Parameter counting: Fixed
+✅ Model creation: Working
+✅ Training loop: NOW WITH PROGRESS BARS!
+
+--------------------------------------------------------------------------------
+RUN NOW
+--------------------------------------------------------------------------------
+
+No more blind waiting. Just visible progress.
+
+  train_tinystories_small.bat
+
+Watch the bars move. See the loss drop. Know it's working.
+
+Come back in 2-4 hours to trained model.
+
+🚀

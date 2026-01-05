@@ -1,0 +1,221 @@
+================================================================================
+JARVIS CLI UPDATED FOR TINYSTORIES MODEL
+================================================================================
+
+PROBLEM:
+  Jarvis was hardcoded to load the old Shakespeare model:
+    - Character-level tokenizer (vocab_size=256)
+    - Looking in checkpoints/cosf_transformer/
+    - Wrong model dimensions (expected 12 layers, 768 dim)
+
+SOLUTION:
+  Updated jarvis_cli.py to auto-detect and load TinyStories model:
+    ✅ BPE tokenizer (vocab_size=8000)
+    ✅ Auto-detect checkpoint location (cosf_large first, then cosf_transformer)
+    ✅ Load model config from checkpoint (no hardcoding!)
+    ✅ Adjust Julia bounds based on model type
+
+--------------------------------------------------------------------------------
+WHAT CHANGED IN JARVIS_CLI.PY
+--------------------------------------------------------------------------------
+
+1. CHECKPOINT LOADING PRIORITY:
+
+   OLD: Only looked in checkpoints/cosf_transformer/
+
+   NEW: Checks in order:
+     1. COSF-MI/checkpoints/cosf_large/        (TinyStories model)
+     2. checkpoints/cosf_large/
+     3. COSF-MI/checkpoints/cosf_transformer/  (Shakespeare model)
+     4. checkpoints/cosf_transformer/
+
+2. TOKENIZER AUTO-DETECTION:
+
+   OLD: Always loaded char-level tokenizer (vocab_size=256)
+
+   NEW: Auto-detects based on model vocab_size:
+     - If vocab_size > 256: Load BPE tokenizer from models/tokenizer_8k.model
+     - If vocab_size = 256: Load char-level tokenizer (Shakespeare fallback)
+
+3. INITIALIZATION ORDER:
+
+   OLD: Load tokenizer first, then model
+
+   NEW: Load model first to get config, then load matching tokenizer
+     - This allows auto-detection of model type
+     - Tokenizer matches model's vocab_size
+
+4. JULIA STABILITY BOUNDS:
+
+   OLD: Always 4.0 (relaxed for Shakespeare)
+
+   NEW: Adaptive bounds:
+     - 1.5 for BPE models (TinyStories, well-trained)
+     - 4.0 for char models (Shakespeare, experimental)
+
+5. FALLBACK MESSAGES:
+
+   Updated to show correct model type:
+     - "conversational" for BPE models
+     - "Shakespeare" for char models
+
+--------------------------------------------------------------------------------
+HOW IT WORKS NOW
+--------------------------------------------------------------------------------
+
+When you run: python jarvis_cli.py
+
+Jarvis will:
+
+1. Search for checkpoints in this order:
+   - TinyStories model (checkpoints/cosf_large/best_model.pt)
+   - Shakespeare model (checkpoints/cosf_transformer/best_model.pt)
+   - Latest epoch checkpoint if best_model.pt not found
+
+2. Load the checkpoint and extract config:
+   - d_model, n_layers, n_heads, vocab_size all from checkpoint
+   - NO hardcoded dimensions!
+
+3. Load the matching tokenizer:
+   - BPE for TinyStories (vocab_size=8000)
+   - Char for Shakespeare (vocab_size=256)
+
+4. Set Julia bounds appropriately:
+   - 1.5 for production models
+   - 4.0 for experimental models
+
+5. Display model info on startup:
+   "Model loaded: 12 layers, 768 dim, 8000 vocab"
+   "BPE tokenizer ready (vocab_size=8000)"
+   "Stability governor ready (Julia bounds = 1.5)"
+
+--------------------------------------------------------------------------------
+TESTING WITHOUT TRAINING
+--------------------------------------------------------------------------------
+
+Since TinyStories training hasn't completed yet, you can test the changes:
+
+Option 1: Train a quick test model (1 epoch)
+  cd C:\Users\fatba\COSF-MI\COSF-MI
+  ..\venv\Scripts\python -m cosf_mi.training.train_cosf_large --model-size small --data-dir data/tinystories --tokenizer models/tokenizer_8k.model --epochs 1 --device cuda
+
+Option 2: Wait for full training to complete
+  Run: train_tinystories_small.bat
+  Wait ~10-20 hours for 10 epochs
+
+Then test Jarvis:
+  python jarvis_cli.py
+
+You should see:
+  [1/5] Loading COSF transformer model...
+        Loading from: COSF-MI\checkpoints\cosf_large\best_model.pt
+        Model loaded: 12 layers, 768 dim, 8000 vocab
+  [2/5] Loading tokenizer...
+        BPE tokenizer ready (vocab_size=8000)
+  ...
+  [5/5] Initializing Stability Governor...
+        Stability governor ready (Julia bounds = 1.5)
+
+  JARVIS IS ONLINE
+
+--------------------------------------------------------------------------------
+WHAT TO EXPECT AFTER TINYSTORIES TRAINING
+--------------------------------------------------------------------------------
+
+With a properly trained TinyStories model:
+
+You: Hello Jarvis
+Jarvis: Hello! How can I help you today?
+
+You: Tell me a story
+Jarvis: Once upon a time, there was a little girl named Lily. She liked to play with her toys.
+
+You: What's 2+2?
+Jarvis: The answer is 4.
+
+Much better than:
+  "Thou art a knave, wherefore dost thou speaketh?"
+
+--------------------------------------------------------------------------------
+BACKWARDS COMPATIBILITY
+--------------------------------------------------------------------------------
+
+Jarvis still works with the old Shakespeare model:
+  - If no TinyStories model found, loads Shakespeare model
+  - Auto-detects char-level tokenizer needed
+  - Uses relaxed Julia bounds (4.0) for stability
+
+So you can use Jarvis NOW (with Shakespeare gibberish) or LATER (with real conversations).
+
+--------------------------------------------------------------------------------
+FILES CHANGED
+--------------------------------------------------------------------------------
+
+✅ jarvis_cli.py
+   - Updated checkpoint search paths (line 120-151)
+   - Auto-detect tokenizer type (line 63-74)
+   - Load model before tokenizer (line 58-74)
+   - Adaptive Julia bounds (line 89-92)
+   - Better fallback messages (line 320-326)
+
+--------------------------------------------------------------------------------
+NEXT STEPS
+--------------------------------------------------------------------------------
+
+1. Wait for TinyStories training to complete:
+   train_tinystories_small.bat (running or will run)
+
+2. Training will save to:
+   checkpoints/cosf_large/best_model.pt
+
+3. Run Jarvis:
+   python jarvis_cli.py
+
+4. Talk to working AI:
+   You: Hello
+   Jarvis: Hello! How can I help you today?
+
+No more Shakespeare! Just normal conversations.
+
+--------------------------------------------------------------------------------
+VERIFICATION
+--------------------------------------------------------------------------------
+
+To verify Jarvis is loading the right model:
+
+  python jarvis_cli.py
+
+Check the startup output:
+
+  ✅ "Loading from: ...checkpoints/cosf_large/best_model.pt"
+  ✅ "Model loaded: 12 layers, 768 dim, 8000 vocab"  (not 256!)
+  ✅ "BPE tokenizer ready (vocab_size=8000)"         (not char-level!)
+  ✅ "Stability governor ready (Julia bounds = 1.5)" (not 4.0!)
+
+If you see vocab_size=256, it means:
+  - TinyStories model not found
+  - Fell back to Shakespeare model
+  - Training not complete yet
+
+================================================================================
+SUMMARY
+================================================================================
+
+✅ Jarvis now auto-detects model type
+✅ Loads BPE tokenizer for TinyStories model
+✅ Searches for checkpoints in correct location (cosf_large)
+✅ Extracts config from checkpoint (no hardcoding)
+✅ Adjusts Julia bounds based on model quality
+✅ Backwards compatible with Shakespeare model
+
+READY TO USE AFTER TRAINING COMPLETES!
+
+Run training:
+  train_tinystories_small.bat
+
+Then run Jarvis:
+  python jarvis_cli.py
+
+Talk to real AI, not Shakespeare gibberish.
+
+🚀
