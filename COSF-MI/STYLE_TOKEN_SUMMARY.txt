@@ -1,0 +1,70 @@
+================================================================================
+STYLE TOKEN CONDITIONING - QUICK SUMMARY
+================================================================================
+
+WHAT WAS ADDED:
+
+1. Data preprocessing script: prepare_styled_tinystories.py
+   - Prepends [STORY] token to each story in TinyStories
+   - Creates styled_train.txt and styled_val.txt
+
+2. Training script: train_with_styled_data.py
+   - Uses styled data files
+   - Same COSF architecture (no changes)
+   - Saves to checkpoints/styled_cosf/
+
+3. Batch file: train_styled.bat
+   - Easy execution on Windows
+
+4. Styled data files:
+   - data/tinystories/styled_train.txt
+   - data/tinystories/styled_val.txt
+
+WHAT DID NOT CHANGE:
+
+- COSF oscillator architecture (unchanged)
+- Chirality implementation (unchanged)
+- Homeostatic sleep logic (unchanged)
+- Julia bounds (unchanged)
+- Phase coherence (unchanged)
+- Tokenizer (unchanged)
+
+THIS IS DATA PREPROCESSING ONLY - NO MODEL CHANGES!
+
+HOW TO USE:
+
+Step 1: Prepare styled data
+  python prepare_styled_tinystories.py
+
+Step 2: Train with styled data
+  train_styled.bat
+  OR
+  python train_with_styled_data.py --model-size tiny --epochs 3 --batch-size 8
+
+WHAT HAPPENS:
+
+- Model sees [STORY] at beginning of each story
+- Oscillators learn to condition on style token
+- Phase relationships encode style information
+- Chirality differentiates semantic polarity within stories
+
+FUTURE EXTENSIONS:
+
+- Add more style tokens: [POEM], [DIALOG], etc.
+- Train on mixed dataset
+- Experiment with style interpolation
+- Analyze how oscillators encode different styles
+
+FILES CREATED:
+
+1. prepare_styled_tinystories.py
+2. train_with_styled_data.py
+3. train_styled.bat
+4. data/tinystories/styled_train.txt
+5. data/tinystories/styled_val.txt
+6. STYLE_TOKEN_CONDITIONING.md
+7. STYLE_TOKEN_SUMMARY.txt (this file)
+
+STATUS: Ready to train!
+
+================================================================================
