@@ -82,13 +82,14 @@ def train_with_gentle_sleep(
                 inputs = inputs.to(device)
                 targets = targets.to(device)
 
-            # Forward
-            logits, loss = model(inputs, targets)
+            # Forward (disable coherence loss since this script doesn't track it)
+            logits, loss = model(inputs, targets, return_coherence_loss=False)
 
             # Backward
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+            model.apply_julia_correction()  # damping moved out of forward()
             scheduler.step()
             optimizer.zero_grad()
 
@@ -191,7 +192,7 @@ def evaluate(model, val_loader, device):
                 inputs = inputs.to(device)
                 targets = targets.to(device)
 
-            logits, loss = model(inputs, targets)
+            logits, loss = model(inputs, targets, return_coherence_loss=False)
             total_loss += loss.item()
 
     model.train()

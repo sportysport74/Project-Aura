@@ -1,0 +1,172 @@
+{
+  "arm": "context_chir",
+  "name": "context_chir",
+  "settings": {
+    "heartbeat": "live",
+    "strength": 0.1,
+    "target": 0.3,
+    "no_wd": [
+      ".phases"
+    ],
+    "context_groups": 4
+  },
+  "args": {
+    "arm": "context_chir",
+    "steps": 10000,
+    "seed": 0,
+    "batch_size": 8,
+    "lr": 0.0003,
+    "sleep_every": 2000,
+    "eval_every": 1000,
+    "val_samples": 512,
+    "tag": "",
+    "out": "round3",
+    "save": true
+  },
+  "final": {
+    "step": 10000,
+    "train_loss": 3.135591745376587,
+    "val_loss": 2.9631213694810867,
+    "live_R": 0.3027175199240446,
+    "static_R": 0.0030989632941782475,
+    "heartbeat_coh": 0.3005661368370056,
+    "chir_abs_mean": 0.9940603971481323,
+    "chir_flipped": 0,
+    "julia_corrections": 0,
+    "context_flipped_frac": 0.012303829193115234,
+    "elapsed_min": 22.496409145991006
+  },
+  "history": [
+    {
+      "step": 1000,
+      "train_loss": 4.246014595031738,
+      "val_loss": 4.167804002761841,
+      "live_R": 0.30603983253240585,
+      "static_R": 0.0026591613423079252,
+      "heartbeat_coh": 0.3026517629623413,
+      "chir_abs_mean": 0.9994028806686401,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.013113578160603842,
+      "elapsed_min": 2.260046414534251
+    },
+    {
+      "step": 2000,
+      "train_loss": 3.7777297496795654,
+      "val_loss": 3.800417944788933,
+      "live_R": 0.30621826834976673,
+      "static_R": 0.0026829582639038563,
+      "heartbeat_coh": 0.302634596824646,
+      "chir_abs_mean": 0.9966133236885071,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.01354654630025228,
+      "elapsed_min": 4.499962989489237
+    },
+    {
+      "step": 3000,
+      "train_loss": 3.5043725967407227,
+      "val_loss": 3.525292009115219,
+      "live_R": 0.3035246394574642,
+      "static_R": 0.002845223294571042,
+      "heartbeat_coh": 0.30159854888916016,
+      "chir_abs_mean": 0.9953528046607971,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012436389923095703,
+      "elapsed_min": 6.818646093209584
+    },
+    {
+      "step": 4000,
+      "train_loss": 3.415956497192383,
+      "val_loss": 3.3171474039554596,
+      "live_R": 0.30324479192495346,
+      "static_R": 0.002957075135782361,
+      "heartbeat_coh": 0.29994064569473267,
+      "chir_abs_mean": 0.9946809411048889,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012622992197672525,
+      "elapsed_min": 9.080427300930022
+    },
+    {
+      "step": 5000,
+      "train_loss": 3.3350629806518555,
+      "val_loss": 3.170398995280266,
+      "live_R": 0.30302896350622177,
+      "static_R": 0.003032781183719635,
+      "heartbeat_coh": 0.30064645409584045,
+      "chir_abs_mean": 0.9942486882209778,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012326478958129883,
+      "elapsed_min": 11.467211401462555
+    },
+    {
+      "step": 6000,
+      "train_loss": 3.124608039855957,
+      "val_loss": 3.073605462908745,
+      "live_R": 0.3036137204617262,
+      "static_R": 0.003076263703405857,
+      "heartbeat_coh": 0.3020719289779663,
+      "chir_abs_mean": 0.9939963221549988,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.01226647694905599,
+      "elapsed_min": 13.749402932326
+    },
+    {
+      "step": 7000,
+      "train_loss": 3.232037305831909,
+      "val_loss": 3.01620951294899,
+      "live_R": 0.3031047638505697,
+      "static_R": 0.003097371431067586,
+      "heartbeat_coh": 0.30151548981666565,
+      "chir_abs_mean": 0.9939942955970764,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012336492538452148,
+      "elapsed_min": 16.060398936271667
+    },
+    {
+      "step": 8000,
+      "train_loss": 3.312913417816162,
+      "val_loss": 2.9807146340608597,
+      "live_R": 0.30246858298778534,
+      "static_R": 0.0030993560794740915,
+      "heartbeat_coh": 0.30070194602012634,
+      "chir_abs_mean": 0.9940288662910461,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012234369913736979,
+      "elapsed_min": 18.304657419522602
+    },
+    {
+      "step": 9000,
+      "train_loss": 3.2502360343933105,
+      "val_loss": 2.9660331308841705,
+      "live_R": 0.30266058444976807,
+      "static_R": 0.003098973073065281,
+      "heartbeat_coh": 0.30105820298194885,
+      "chir_abs_mean": 0.9940568208694458,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012317736943562826,
+      "elapsed_min": 20.55326651732127
+    },
+    {
+      "step": 10000,
+      "train_loss": 3.135591745376587,
+      "val_loss": 2.9631213694810867,
+      "live_R": 0.3027175199240446,
+      "static_R": 0.0030989632941782475,
+      "heartbeat_coh": 0.3005661368370056,
+      "chir_abs_mean": 0.9940603971481323,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.012303829193115234,
+      "elapsed_min": 22.496409145991006
+    }
+  ],
+  "sleeps": []
+}

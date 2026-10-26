@@ -76,6 +76,7 @@ def train_with_sleep_cycles(
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+            model.apply_julia_correction()  # damping moved out of forward()
             scheduler.step()
             optimizer.zero_grad()
 

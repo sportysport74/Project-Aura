@@ -5,3 +5,10 @@ checkpoints/
 cache/
 *.pt
 *.pth
+
+# Added 2026-10-25 before first Linux-side commit
+runs/
+memory/jarvis/
+.claude/settings.local.json
+*.exe
+nul

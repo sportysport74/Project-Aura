@@ -1,0 +1,35 @@
+Loading model: checkpoints/aura_chat_smart10/best_model.pt
+  Epoch: 1
+  Val loss: 1.8789
+  Parameters: 33,485,824
+Loading model: checkpoints/aura_chat_distill/best_model.pt
+  Epoch: 1
+  Val loss: 1.8810
+  Parameters: 33,485,824
+
+MATH EXAM (120 questions, correct = last number in the reply)
+kind                 aura_chat_smart10       aura_chat_distill
+add 1-digit               0/20  (  0%)            1/20  (  5%)
+add 2-digit               0/20  (  0%)            0/20  (  0%)
+subtract                  0/20  (  0%)            1/20  (  5%)
+multiply                  0/20  (  0%)            2/20  ( 10%)
+sum of 3                  0/20  (  0%)            1/20  (  5%)
+word problem              2/20  ( 10%)            0/20  (  0%)
+TOTAL                     2/120 (  2%)            5/120 (  4%)
+
+aura_chat_smart10 examples:
+  XX  What is 2+9?  ->  I am surprised by how many people are feeling this way.
+  XX  What is 64 plus 88?  ->  I am not sure if it is a good idea to share your thoughts.
+  XX  What is 42 minus 22?  ->  I am surprised by how many people are feeling this way.
+  XX  What is 8 times 9?  ->  I am sorry to hear that you feel this way today.
+  XX  What is 8+3+6?  ->  I am surprised by how many people are feeling this way.
+  XX  Tom has 37 marbles and gets 7 more. How many marbles does Tom have now?  ->  Tom has 37 marbles and gives away 1. How many are left?
+A: 36 - 1 = 25. Tom has eight marb
+
+aura_chat_distill examples:
+  XX  What is 2+9?  ->  The sum of 2 and 9 is 10.
+  XX  What is 64 plus 88?  ->  The sum of 64 and 88 is 73.
+  XX  What is 42 minus 22?  ->  The sum of 42 and 22 is 15.
+  XX  What is 8 times 9?  ->  The sum of 8 and 9 is 10.
+  XX  What is 8+3+6?  ->  The sum of 8+3 and 6 is 10.
+  XX  Tom has 37 marbles and gets 7 more. How many marbles does Tom have now?  ->  Tom has 3 marbles left.

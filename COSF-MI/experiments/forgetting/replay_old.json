@@ -1,0 +1,144 @@
+{
+  "arm": "replay_old",
+  "name": "replay_old",
+  "args": {
+    "arm": "replay_old",
+    "seed": 0,
+    "steps_a": 6000,
+    "steps_b": 4000,
+    "sleep_every": 500,
+    "replay": 50,
+    "batch_size": 8,
+    "lr": 0.0003,
+    "eval_every": 500,
+    "out": "forgetting"
+  },
+  "history": [
+    {
+      "step": 500,
+      "phase": "A",
+      "story_val": 4.619088351726532,
+      "shakespeare_val": 8.280779711405437
+    },
+    {
+      "step": 1000,
+      "phase": "A",
+      "story_val": 4.116746157407761,
+      "shakespeare_val": 7.602960389455159
+    },
+    {
+      "step": 1500,
+      "phase": "A",
+      "story_val": 3.9466743022203445,
+      "shakespeare_val": 7.529455362955729
+    },
+    {
+      "step": 2000,
+      "phase": "A",
+      "story_val": 3.785264939069748,
+      "shakespeare_val": 7.439065367380778
+    },
+    {
+      "step": 2500,
+      "phase": "A",
+      "story_val": 3.642495408654213,
+      "shakespeare_val": 7.305024833679199
+    },
+    {
+      "step": 3000,
+      "phase": "A",
+      "story_val": 3.507364049553871,
+      "shakespeare_val": 7.249372965494792
+    },
+    {
+      "step": 3500,
+      "phase": "A",
+      "story_val": 3.393379181623459,
+      "shakespeare_val": 7.192814725240072
+    },
+    {
+      "step": 4000,
+      "phase": "A",
+      "story_val": 3.308508336544037,
+      "shakespeare_val": 7.115794747670492
+    },
+    {
+      "step": 4500,
+      "phase": "A",
+      "story_val": 3.222082793712616,
+      "shakespeare_val": 7.091096076965332
+    },
+    {
+      "step": 5000,
+      "phase": "A",
+      "story_val": 3.1670896857976913,
+      "shakespeare_val": 7.050436007181803
+    },
+    {
+      "step": 5500,
+      "phase": "A",
+      "story_val": 3.116322413086891,
+      "shakespeare_val": 6.935123170216878
+    },
+    {
+      "step": 6000,
+      "phase": "A",
+      "story_val": 3.0696862787008286,
+      "shakespeare_val": 6.982048346201579
+    },
+    {
+      "step": 6500,
+      "phase": "B",
+      "story_val": 4.123844295740128,
+      "shakespeare_val": 4.685864473978678
+    },
+    {
+      "step": 7000,
+      "phase": "B",
+      "story_val": 3.9189931601285934,
+      "shakespeare_val": 4.56508513768514
+    },
+    {
+      "step": 7500,
+      "phase": "B",
+      "story_val": 3.7852303236722946,
+      "shakespeare_val": 4.5075080172220865
+    },
+    {
+      "step": 8000,
+      "phase": "B",
+      "story_val": 3.68185093998909,
+      "shakespeare_val": 4.481850153605143
+    },
+    {
+      "step": 8500,
+      "phase": "B",
+      "story_val": 3.5608011037111282,
+      "shakespeare_val": 4.461540355682373
+    },
+    {
+      "step": 9000,
+      "phase": "B",
+      "story_val": 3.467667132616043,
+      "shakespeare_val": 4.447421538035075
+    },
+    {
+      "step": 9500,
+      "phase": "B",
+      "story_val": 3.384589895606041,
+      "shakespeare_val": 4.441422170003255
+    },
+    {
+      "step": 10000,
+      "phase": "B",
+      "story_val": 3.3707910627126694,
+      "shakespeare_val": 4.44234748840332
+    }
+  ],
+  "fresh_shakespeare_batches": 3650,
+  "replayed_batches": 350,
+  "story_after_A": 3.0696862787008286,
+  "story_final": 3.3707910627126694,
+  "forgetting": 0.3011047840118408,
+  "shakespeare_final": 4.44234748840332
+}

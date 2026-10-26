@@ -1,0 +1,61 @@
+{
+  "arm": "recommended",
+  "name": "recommended_calib_B",
+  "settings": {
+    "heartbeat": "live",
+    "strength": 0.1,
+    "target": 0.3,
+    "no_wd": [
+      ".phases"
+    ]
+  },
+  "args": {
+    "arm": "recommended",
+    "steps": 300,
+    "seed": 0,
+    "batch_size": 32,
+    "lr": 0.0006,
+    "sleep_every": 2000,
+    "replay": 200,
+    "eval_every": 100000,
+    "val_samples": 512,
+    "tag": "_calib_B",
+    "out": "scale/calib",
+    "save": false,
+    "d_model": 256,
+    "layers": 4,
+    "heads": 4,
+    "d_ff": 3072,
+    "warmup": 200
+  },
+  "fresh_batches": 300,
+  "final": {
+    "step": 300,
+    "train_loss": 5.77218770980835,
+    "val_loss": 5.599196404218674,
+    "live_R": 0.3102834578603506,
+    "static_R": 0.0005640385206788778,
+    "heartbeat_coh": 0.3007153272628784,
+    "chir_abs_mean": 1.0027965307235718,
+    "chir_flipped": 0,
+    "julia_corrections": 0,
+    "context_flipped_frac": 0.0,
+    "elapsed_min": 0.3985413670539856
+  },
+  "history": [
+    {
+      "step": 300,
+      "train_loss": 5.77218770980835,
+      "val_loss": 5.599196404218674,
+      "live_R": 0.3102834578603506,
+      "static_R": 0.0005640385206788778,
+      "heartbeat_coh": 0.3007153272628784,
+      "chir_abs_mean": 1.0027965307235718,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "context_flipped_frac": 0.0,
+      "elapsed_min": 0.3985413670539856
+    }
+  ],
+  "sleeps": []
+}

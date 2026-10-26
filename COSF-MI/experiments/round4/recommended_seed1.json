@@ -1,0 +1,159 @@
+{
+  "arm": "recommended",
+  "name": "recommended_seed1",
+  "settings": {
+    "heartbeat": "live",
+    "strength": 0.1,
+    "target": 0.3,
+    "no_wd": [
+      ".phases"
+    ]
+  },
+  "args": {
+    "arm": "recommended",
+    "steps": 10000,
+    "seed": 1,
+    "batch_size": 8,
+    "lr": 0.0003,
+    "sleep_every": 2000,
+    "eval_every": 1000,
+    "val_samples": 512,
+    "tag": "",
+    "out": "round2"
+  },
+  "final": {
+    "step": 10000,
+    "train_loss": 3.0136778354644775,
+    "val_loss": 2.9515915662050247,
+    "live_R": 0.3030918352305889,
+    "static_R": 0.002137191593647003,
+    "heartbeat_coh": 0.3006081283092499,
+    "chir_abs_mean": 0.990054190158844,
+    "chir_flipped": 0,
+    "julia_corrections": 0,
+    "elapsed_min": 16.69100704193115
+  },
+  "history": [
+    {
+      "step": 1000,
+      "train_loss": 4.031065940856934,
+      "val_loss": 4.1028963923454285,
+      "live_R": 0.305841114372015,
+      "static_R": 0.0018025122117251158,
+      "heartbeat_coh": 0.3016767203807831,
+      "chir_abs_mean": 0.9969900846481323,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 1.7959895133972168
+    },
+    {
+      "step": 2000,
+      "train_loss": 3.7554759979248047,
+      "val_loss": 3.7334626019001007,
+      "live_R": 0.30424329452216625,
+      "static_R": 0.0019411228131502867,
+      "heartbeat_coh": 0.3003688156604767,
+      "chir_abs_mean": 0.9942412972450256,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 3.558936719099681
+    },
+    {
+      "step": 3000,
+      "train_loss": 3.8373050689697266,
+      "val_loss": 3.4900320172309875,
+      "live_R": 0.30384369753301144,
+      "static_R": 0.002017425838857889,
+      "heartbeat_coh": 0.2994336485862732,
+      "chir_abs_mean": 0.9924407601356506,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 5.328640154997507
+    },
+    {
+      "step": 4000,
+      "train_loss": 3.349799394607544,
+      "val_loss": 3.284540072083473,
+      "live_R": 0.3043627329170704,
+      "static_R": 0.002073888899758458,
+      "heartbeat_coh": 0.30211949348449707,
+      "chir_abs_mean": 0.9913529753684998,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 7.095450858275096
+    },
+    {
+      "step": 5000,
+      "train_loss": 3.3795580863952637,
+      "val_loss": 3.1513799279928207,
+      "live_R": 0.3040191773325205,
+      "static_R": 0.002114077564328909,
+      "heartbeat_coh": 0.3015892803668976,
+      "chir_abs_mean": 0.9905440211296082,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 8.86526098648707
+    },
+    {
+      "step": 6000,
+      "train_loss": 3.0341176986694336,
+      "val_loss": 3.061210051178932,
+      "live_R": 0.30310622602701187,
+      "static_R": 0.002128515625372529,
+      "heartbeat_coh": 0.30067065358161926,
+      "chir_abs_mean": 0.9901924133300781,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 10.637909464041392
+    },
+    {
+      "step": 7000,
+      "train_loss": 3.2887744903564453,
+      "val_loss": 3.005928158760071,
+      "live_R": 0.3038013521581888,
+      "static_R": 0.002131203655153513,
+      "heartbeat_coh": 0.30104637145996094,
+      "chir_abs_mean": 0.9900214076042175,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 12.40911808013916
+    },
+    {
+      "step": 8000,
+      "train_loss": 2.96751070022583,
+      "val_loss": 2.969654366374016,
+      "live_R": 0.3033087905496359,
+      "static_R": 0.002134731039404869,
+      "heartbeat_coh": 0.3004394769668579,
+      "chir_abs_mean": 0.9900357723236084,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 14.184553388754527
+    },
+    {
+      "step": 9000,
+      "train_loss": 2.961447238922119,
+      "val_loss": 2.9547190815210342,
+      "live_R": 0.3029305189847946,
+      "static_R": 0.0021367333829402924,
+      "heartbeat_coh": 0.30057644844055176,
+      "chir_abs_mean": 0.9900528192520142,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 15.624676712354024
+    },
+    {
+      "step": 10000,
+      "train_loss": 3.0136778354644775,
+      "val_loss": 2.9515915662050247,
+      "live_R": 0.3030918352305889,
+      "static_R": 0.002137191593647003,
+      "heartbeat_coh": 0.3006081283092499,
+      "chir_abs_mean": 0.990054190158844,
+      "chir_flipped": 0,
+      "julia_corrections": 0,
+      "elapsed_min": 16.69100704193115
+    }
+  ],
+  "sleeps": []
+}

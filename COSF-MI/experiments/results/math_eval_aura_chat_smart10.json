@@ -1,0 +1,842 @@
+[
+ {
+  "kind": "add 1-digit",
+  "q": "What is 2+9?",
+  "answer": 11,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 8+8?",
+  "answer": 16,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 3+6?",
+  "answer": 9,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 2+4?",
+  "answer": 6,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 3+5?",
+  "answer": 8,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 1+5?",
+  "answer": 6,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 7+4?",
+  "answer": 11,
+  "reply": "I am surprised by how much you feel about your day.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 7+2?",
+  "answer": 9,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 5+1?",
+  "answer": 6,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 4+9?",
+  "answer": 13,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 4+3?",
+  "answer": 7,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 6+3?",
+  "answer": 9,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 8+6?",
+  "answer": 14,
+  "reply": "I am surprised by how much you can learn from your experience.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 3+8?",
+  "answer": 11,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 8+1?",
+  "answer": 9,
+  "reply": "I am surprised by how much you feel about your day.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 1+4?",
+  "answer": 5,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 7+5?",
+  "answer": 12,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 9+6?",
+  "answer": 15,
+  "reply": "I am surprised by how much you feel about your day.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 1+3?",
+  "answer": 4,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 1-digit",
+  "q": "What is 8+2?",
+  "answer": 10,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 64 plus 88?",
+  "answer": 152,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 80 plus 31?",
+  "answer": 111,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 36 plus 39?",
+  "answer": 75,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 23 plus 17?",
+  "answer": 40,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 36 plus 12?",
+  "answer": 48,
+  "reply": "I think that sounds interesting and surprising, isn't it?",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 76 plus 90?",
+  "answer": 166,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 46 plus 28?",
+  "answer": 74,
+  "reply": "I am not sure if it is a valid answer to the question.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 41 plus 70?",
+  "answer": 111,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 85 plus 53?",
+  "answer": 138,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 69 plus 22?",
+  "answer": 91,
+  "reply": "24 is a common year, and it seems like the world has many surprises.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 14 plus 62?",
+  "answer": 76,
+  "reply": "I am not sure if you could have a plan to make it better.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 77 plus 20?",
+  "answer": 97,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 58 plus 82?",
+  "answer": 140,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 22 plus 99?",
+  "answer": 121,
+  "reply": "I am not sure if you could have a good day.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 17 plus 45?",
+  "answer": 62,
+  "reply": "I am not sure if you will get a new one.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 58 plus 77?",
+  "answer": 135,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 49 plus 73?",
+  "answer": 122,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 16 plus 89?",
+  "answer": 105,
+  "reply": "I am not sure if it is a valid answer, but we can find out.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 69 plus 15?",
+  "answer": 84,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "add 2-digit",
+  "q": "What is 16 plus 68?",
+  "answer": 84,
+  "reply": "I am not sure if it is a good idea to share your thoughts.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 42 minus 22?",
+  "answer": 20,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 23 minus 17?",
+  "answer": 6,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 58 minus 20?",
+  "answer": 38,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 36 minus 22?",
+  "answer": 14,
+  "reply": "I think that is a good idea, but it can be quite unpleasant.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 72 minus 21?",
+  "answer": 51,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 28 minus 28?",
+  "answer": 0,
+  "reply": "I am surprised by how much you can learn from this experience.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 61 minus 11?",
+  "answer": 50,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 67 minus 35?",
+  "answer": 32,
+  "reply": "I am surprised by how much you can learn from this experience.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 33 minus 15?",
+  "answer": 18,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 48 minus 40?",
+  "answer": 8,
+  "reply": "I am surprised by how much you can learn about your learning.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 77 minus 7?",
+  "answer": 70,
+  "reply": "I am surprised by how much you can learn from this experience.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 49 minus 29?",
+  "answer": 20,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 16 minus 9?",
+  "answer": 7,
+  "reply": "I am surprised by how much you can learn about the world around us.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 72 minus 38?",
+  "answer": 34,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 50 minus 45?",
+  "answer": 5,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 87 minus 50?",
+  "answer": 37,
+  "reply": "I am surprised by how much you can learn from this experience.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 38 minus 23?",
+  "answer": 15,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 37 minus 14?",
+  "answer": 23,
+  "reply": "I think that is a good idea, but it can be quite frustrating.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 72 minus 34?",
+  "answer": 38,
+  "reply": "I am surprised by how much you can learn from your experience.",
+  "correct": false
+ },
+ {
+  "kind": "subtract",
+  "q": "What is 25 minus 11?",
+  "answer": 14,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 8 times 9?",
+  "answer": 72,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 7 times 4?",
+  "answer": 28,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 7 times 2?",
+  "answer": 14,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 5 times 9?",
+  "answer": 45,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 6 times 7?",
+  "answer": 42,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 5 times 2?",
+  "answer": 10,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 7 times 9?",
+  "answer": 63,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 2 times 7?",
+  "answer": 14,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 6 times 6?",
+  "answer": 36,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 8 times 3?",
+  "answer": 24,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 7 times 8?",
+  "answer": 56,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 2 times 8?",
+  "answer": 16,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 8 times 6?",
+  "answer": 48,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 8 times 7?",
+  "answer": 56,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 4 times 2?",
+  "answer": 8,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 4 times 7?",
+  "answer": 28,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 5 times 3?",
+  "answer": 15,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 6 times 4?",
+  "answer": 24,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 8 times 5?",
+  "answer": 40,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "multiply",
+  "q": "What is 4 times 6?",
+  "answer": 24,
+  "reply": "I am sorry to hear that you feel this way today.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 8+3+6?",
+  "answer": 17,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 5+7+3?",
+  "answer": 15,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 1+7+7?",
+  "answer": 15,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 3+1+7?",
+  "answer": 11,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 5+7+2?",
+  "answer": 14,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 2+3+7?",
+  "answer": 12,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 9+5+1?",
+  "answer": 15,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 4+2+1?",
+  "answer": 7,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 6+8+3?",
+  "answer": 17,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 7+3+2?",
+  "answer": 12,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 3+4+9?",
+  "answer": 16,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 1+2+1?",
+  "answer": 4,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 9+7+5?",
+  "answer": 21,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 9+6+7?",
+  "answer": 22,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 8+2+4?",
+  "answer": 14,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 4+5+7?",
+  "answer": 16,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 9+5+8?",
+  "answer": 22,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 8+3+8?",
+  "answer": 19,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 3+1+2?",
+  "answer": 6,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "sum of 3",
+  "q": "What is 5+7+9?",
+  "answer": 21,
+  "reply": "I am surprised by how many people are feeling this way.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Tom has 37 marbles and gets 7 more. How many marbles does Tom have now?",
+  "answer": 44,
+  "reply": "Tom has 37 marbles and gives away 1. How many are left?\nA: 36 - 1 = 25. Tom has eight marbles left. He is about to go for a walk in the park. The sun shines brightly, making everything feel more cheerful.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Lena has 21 apples and gets 18 more. How many apples does Lena have now?",
+  "answer": 39,
+  "reply": "I think that sounds like a fun idea, but it is not easy.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Omar has 8 cookies and gets 11 more. How many cookies does Omar have now?",
+  "answer": 19,
+  "reply": "Omar has 8 cookies and gets 12 more cookie cookies.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Omar has 2 stickers and gets 30 more. How many stickers does Omar have now?",
+  "answer": 32,
+  "reply": "I am sorry to hear that Omar has been too busy with the cards.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Ivy has 21 marbles and gets 12 more. How many marbles does Ivy have now?",
+  "answer": 33,
+  "reply": "It is surprising how many marbles do not have enough to reach.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Tom has 20 marbles and gets 12 more. How many marbles does Tom have now?",
+  "answer": 32,
+  "reply": "Tom has 20 marbles left.\n<|endoftext|>\nQ: What is 6 x 1?\nA: 6 / 1 = 6.\n\nQ : Is 43 bigger or smaller than 50?\nLiving people\nPeople from the United States\nAmerican movie actors\nAmerican television actors\nSingers from New York City\nWriters from New",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Sam has 14 stickers and gets 22 more. How many stickers does Sam have now?",
+  "answer": 36,
+  "reply": "Sam has 14 stickers left.\n<|endoftext|>\nQ: What is 2 x 6?\nA: 2 + 6 = 8.\n\nQ:-90 - 57?\nLiving people\nPeople from the canton of Bern, Switzerland\nBelgian Roman Catholics\nMunicipalities in Geneva\nCapital cities and towns of",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Ivy has 18 stickers and gets 4 more. How many stickers does Ivy have now?",
+  "answer": 22,
+  "reply": "It is surprising how many stickers do you have in mind for a while?",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Mia has 17 cookies and gets 11 more. How many cookies does Mia have now?",
+  "answer": 28,
+  "reply": "Mia has 17 cookies left.\n<|endoftext|>\nQ: What is 6 x 5?\nA: 6xcuba = 20.\n\nQ : Is 34 bigger or smaller than 9?\nYep, I have not seen a big hole in my house. It was very dark and quiet outside. You might see it there too.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Mia has 13 marbles and gets 12 more. How many marbles does Mia have now?",
+  "answer": 25,
+  "reply": "Mia has 13 marbles left.\n<|endoftext|>\nQ: What is 7 x 6?\nA: 7xcuba = 24.\n\nQ : Is 5 bigger or smaller than 9?\nLiving people\nPeople from the canton of Bern, Switzerland\nMunicipalities in Geneva\nCities in Switzerland\nSettlements in Genev",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Omar has 33 coins and gets 2 more. How many coins does Omar have now?",
+  "answer": 35,
+  "reply": "Omar has 3 coins and gets 2 more coins.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Lena has 6 coins and gets 14 more. How many coins does Lena have now?",
+  "answer": 20,
+  "reply": "I think that is a good idea, but she does not know how to buy.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Mia has 5 apples and gets 9 more. How many apples does Mia have now?",
+  "answer": 14,
+  "reply": "Mia has 5 apples and gives away 9. How many are left?\nA: Mia starts with 5. 5 + 9 = 14. Mia has eight apples and three apples. They like to eat their snack time together. But then, they hear a loud noise outside. It is the sound of thunder coming from the sky. The lightning bolt hits them and",
+  "correct": true
+ },
+ {
+  "kind": "word problem",
+  "q": "Ivy has 14 apples and gets 11 more. How many apples does Ivy have now?",
+  "answer": 25,
+  "reply": "Ivy has 14 apples and gets 25 more. How many apples does it have now?",
+  "correct": true
+ },
+ {
+  "kind": "word problem",
+  "q": "Sam has 8 coins and gets 11 more. How many coins does Sam have now?",
+  "answer": 19,
+  "reply": "Sam has 8 coins and gives away 13. How many are left?\nA: Tom starts with 8. 8 + 14 = 22. Tom has 20 coins.\n<|endoftext|>\nQ: What is 9 x 5?\nLiving people\nMalcolm XI (born 6 May 1976) is",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Lena has 40 stickers and gets 28 more. How many stickers does Lena have now?",
+  "answer": 68,
+  "reply": "I think that sounds like a fun idea, but it can be quite disgusting.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Omar has 25 marbles and gets 21 more. How many marbles does Omar have now?",
+  "answer": 46,
+  "reply": "Omar has 25 marbles and gets 16 more. How many marbles does Omar have now?\nOmar is a great choice for winning, but I am not sure if it will be worth the money.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Omar has 39 apples and gets 10 more. How many apples does Omar have now?",
+  "answer": 49,
+  "reply": "Omar has 39 apples and gets 10 more. How many apples does Omar have now?\nA: I think that is a good idea, but it can be quite unappealing to see the world around us.",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Ivy has 30 books and gets 13 more. How many books does Ivy have now?",
+  "answer": 43,
+  "reply": "Ivy has 3 books and gets 14 more. How many books do you have now?",
+  "correct": false
+ },
+ {
+  "kind": "word problem",
+  "q": "Sam has 8 books and gets 17 more. How many books does Sam have now?",
+  "answer": 25,
+  "reply": "Sam has 8 books and gives away 17. How many are left?\nA: 8 - 16 = 5. Sam has eight books and one book in the middle of a row. He is very happy to read it too. Sam loves reading books because they make stories with their own words. They have fun adventures that can be exciting for everyone.",
+  "correct": false
+ }
+]

@@ -1,0 +1,75 @@
+================================================================================
+OVERNIGHT TRAINING - START HERE
+================================================================================
+
+BEFORE BED:
+-----------
+1. Double-click: train_overnight.bat
+2. Wait for "Training starting..." message
+3. Go game / sleep!
+
+Training will run for ~6-8 hours (5 epochs on tiny model)
+
+WHEN YOU WAKE UP:
+-----------------
+1. Double-click: analyze_morning.bat
+2. Check the results for:
+   - Coherence evolution (0.01 -> 0.20+)
+   - Chirality flips (starting to happen?)
+   - Consolidation success (>50%?)
+
+WHAT'S BEING TRAINED:
+---------------------
+- Dataset: Multi-Intent ([STORY] + [CODE])
+- Bridge words: buffer, branch, loop, class, root
+- AURA LEVEL 1: Kuramoto coherence loss
+- 5 epochs (~6-8 hours)
+
+Bridge words have different meanings in each context:
+  buffer: story = protect,    code = memory
+  branch: story = tree,       code = git/conditional
+  loop:   story = circle,     code = iteration
+  class:  story = school,     code = OOP
+  root:   story = plant,      code = directory
+
+The model will learn to use CHIRALITY (left/right spirals) to distinguish!
+
+EXPECTED RESULTS:
+-----------------
+By morning you should see:
+  [OK] Coherence rising to 0.20+
+  [OK] Chirality flips beginning
+  [OK] Semantic differentiation on bridge words
+  [OK] 80%+ consolidation success rate
+
+CHECKPOINTS:
+------------
+Saved to: checkpoints/overnight_bridge_words/
+  - checkpoint_epoch_1.pt
+  - checkpoint_epoch_2.pt
+  - ...
+  - best_model.pt (lowest validation loss)
+
+IF SOMETHING GOES WRONG:
+-------------------------
+- Check the console for error messages
+- Training logs are printed to console
+- If it crashes, the last checkpoint is still saved
+
+TROUBLESHOOTING:
+----------------
+Q: "Cache not found, tokenizing..."
+A: Normal! First time setup, will be fast next time.
+
+Q: Training seems slow?
+A: Normal speed is ~3.8 it/s on RTX GPU
+
+Q: Loss not decreasing?
+A: Check coherence (coh) - should rise even if loss plateaus
+
+Q: "out of memory" error?
+A: Reduce batch size: edit train_overnight.py line 246
+
+================================================================================
+THAT'S IT! Just run train_overnight.bat and go enjoy your evening!
+================================================================================
