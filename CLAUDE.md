@@ -58,8 +58,8 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
   Math exam 5/120, against 2/120 for smart10. It learned the answer *template* from the teacher but not the arithmetic
   ("The sum of 64 and 88 is 73"; subtraction gets answered as a sum).
 - Smoke run on Linux (tiny, 11.5M params, batch 32×256): about 100 ms/step, ~80k tok/s, 5.2 GiB peak VRAM.
-  That's only ~5.6 TFLOPS: attention is a hand-written softmax (`cosf_oscillator.py:475`, `:1008`) in fp32, with no
-  SDPA and no bf16 autocast. Flash SDPA works on this GPU (sm_120), so this is the main speed lever.
+  That's only ~5.6 TFLOPS: attention was a hand-written softmax in fp32. Branch `sdpa-bf16` replaces it with SDPA + bf16
+  (+18% tok/s on `big`; see Setup status). The oscillators must stay fp32, which caps what bf16 can do.
 - Tests: 66 pass. Failing: `tests/test_constants.py` (imports `E_8_6`, removed from `core/constants.py`)
   and `test_phi_decomposition.py::test_assign_shells` (expects -1 below base, gets 0).
 - `cosf_core` Rust test `test_convergence` fails: it asserts φ¹⁷ ≈ e^8.6, but φ¹⁷ = 3571 and e^8.6 = 5432
@@ -112,9 +112,35 @@ Open:
   `OutOfMemoryError`, so the smoke test's OOM check can't catch it. A run just gets roughly 250× slower. The fix is on Windows (user):
   NVIDIA Control Panel → Manage 3D settings → *CUDA - Sysmem Fallback Policy* → *Prefer No Sysmem Fallback*; whether it applies to WSL
   is unverified. Until then, treat step_ms jumping by 100× as an OOM.
-- [ ] **Real speed lever:** bf16 autocast + `F.scaled_dot_product_attention` (`is_causal=True`, `scale=coupling/√d_k` for the
-  φ block) in both attention blocks (`cosf_oscillator.py:468`, `:999`). Keep the phase/coherence maths in fp32. Then spend
-  freed memory on seq_len > 256 or a bigger model. Re-run the probe afterwards.
+- [x] SDPA + bf16 (2026-10-26, branch `sdpa-bf16`). `KuramotoAttention` (the only attention `big` uses) now calls
+  `F.scaled_dot_product_attention(is_causal=True, scale=φ/√d_k)`; the model passes `causal=True` instead of a tril mask.
+  There's no custom bias, and the only mask is causal. bf16 runs the **flash** kernels for forward and backward (verified with the profiler);
+  fp32 uses the mem-efficient kernel. `--precision bf16` is now the default in `train_overnight.py`.
+  **Oscillator layers always run in fp32** (autocast is disabled inside `COSFOscillatorLayer.forward`): Θ reaches ~2400 rad, where
+  the bf16 step size is 16 rad. CE and the heartbeat loss are fp32 too. So bf16 only covers the attention core and `lm_head`.
+  The attention-coherence diagnostic is recomputed for batch element 0 only (SDPA returns no weights).
+  fp32 equivalence against the old code on CPU: logits within 3e-7, grads within 4e-9.
+  A/B (`big`, batch 64, 500 steps, seed 1234; tok/s = median of steps 100-500):
+
+  | arm | tok/s | torch peak | val loss (50 batches) |
+  |---|---|---|---|
+  | A old attention, fp32 | 67.4k | 18.88 GiB | 5.717 |
+  | B SDPA, fp32 | 74.7k (+11%) | 16.63 GiB | 5.831 |
+  | C SDPA, bf16 | **79.4k (+18%)** | **15.90 GiB** | 5.826 |
+
+  A and B are the same maths and still differ by a mean of 0.050 on the smoothed train curve and 0.11 on val, from float
+  noise compounding after about step 150. That's the noise floor at 500 steps. C vs B is 0.046 / 0.005, inside it, so bf16 is kept.
+- [ ] **Next speedups, from a torch.profiler run** (2026-10-26; `big`, batch 64, bf16, 3 steps after 5 warmup steps; ~215 ms/step):
+  the GPU is busy 80.6% and idle 19.4% (41.6 ms/step). ~3,000 kernel launches per step. The mostly elementwise oscillator
+  chain (mul/add/cos/sin/sum/neg in fp32) is ~60% of GPU time. `aten::mm` is 26% and runs as fp32 SIMT sgemm, with no tensor cores.
+  Flash attention doesn't make the top 15. There are 55 real syncs per step: **48 in `apply_julia_correction`** (one `.item()` per oscillator,
+  33 ms CPU blocked), 2 in forward (`drift.item()` and the heartbeat `coherence.item()`, 12 ms), and 3 in bookkeeping. The data loader costs 2.4 ms/step of GPU idle.
+  Order to try (expected gain): (1) remove the per-step syncs: vectorized Julia check, drift/coherence kept as tensors,
+  bookkeeping every `log_every`. This is also needed before torch.compile can capture the forward; (2) `torch.compile` to fuse the oscillator
+  elementwise chain, the biggest lever; (3) TF32/bf16 for the Ω·x matmul, which needs a phase-precision A/B first; (4) loader
+  workers/pinned memory, ≤1-2%.
+- [ ] Spend the freed memory: seq_len > 256 or a bigger model. Re-run the batch-size probe on `sdpa-bf16` first.
+- [ ] Param count mismatch: `big` reports **33.5M** params at start-up, while Known state says 41.9M. Check against a checkpoint.
 
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.

@@ -630,6 +630,12 @@ class COSFOscillatorLayer(nn.Module):
         Returns:
             Output tensor [batch, ..., out_features]
         """
+        # Always fp32: phases reach ~2400 rad, where bf16's step is 16 rad, so
+        # cos/sin of a bf16 phase would be noise. Run outside any autocast.
+        if torch.is_autocast_enabled(x.device.type):
+            with torch.autocast(x.device.type, enabled=False):
+                return self.forward(x.float(), apply_homeostasis)
+
         # Determine if homeostasis should be applied
         if apply_homeostasis is None:
             apply_homeostasis = self.enable_homeostasis and self.training
@@ -966,13 +972,16 @@ class KuramotoAttention(nn.Module):
         self,
         x: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
+        causal: bool = False,
     ) -> torch.Tensor:
         """
         Compute Kuramoto-style attention.
 
         Args:
             x: Input tensor [batch, seq, d_model]
-            mask: Optional attention mask
+            mask: Optional bool attention mask (True = may attend). Any explicit
+                mask rules out the flash kernel; for plain causal use causal=True.
+            causal: Causal attention without building a mask (flash-eligible)
 
         Returns:
             Output tensor [batch, seq, d_model]
@@ -989,27 +998,21 @@ class KuramotoAttention(nn.Module):
         K = K.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
         V = V.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
 
-        # Compute phase coherence: how aligned are Q and K?
-        # Instead of QK^T, use cosine similarity of oscillations
-        # This measures phase synchronization
-
-        # Standard scaled dot-product attention
-        # (We still use this, but interpret it as phase coherence)
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
-
-        # Scale by coupling constant (φ)
-        scores = scores * self.coupling_constant
-
-        # Apply mask if provided
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-
-        # Softmax gives phase-locking probabilities
-        attn_weights = F.softmax(scores, dim=-1)
-        attn_weights = self.dropout(attn_weights)
-
-        # Apply attention (phase-locked coupling)
-        out = torch.matmul(attn_weights, V)  # [batch, n_heads, seq, d_k]
+        # Scaled dot-product attention, interpreted as phase coherence, with the
+        # coupling constant (φ) folded into the scale: softmax(φ·QKᵀ/√d)·V.
+        # Fused SDPA never materializes the [seq, seq] weights; under bf16
+        # autocast it runs the flash kernel.
+        scale = self.coupling_constant / math.sqrt(self.d_k)
+        if mask is not None and mask.dtype != torch.bool:
+            mask = mask != 0  # SDPA reads float masks as additive biases; keep the 0 = blocked meaning
+        is_causal = causal and mask is None
+        out = F.scaled_dot_product_attention(
+            Q, K, V,
+            attn_mask=mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            is_causal=is_causal,
+            scale=scale,
+        )  # [batch, n_heads, seq, d_k]
 
         # Concatenate heads
         out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
@@ -1017,9 +1020,16 @@ class KuramotoAttention(nn.Module):
         # Output projection
         out = self.out_oscillator(out)
 
-        # Track phase coherence
-        with torch.no_grad():
-            self.coherence = attn_weights.max(dim=-1)[0].mean()
+        # Track phase coherence (mean max attention weight). SDPA doesn't return
+        # the weights, so recompute them for batch element 0 only, before dropout.
+        with torch.no_grad(), torch.autocast(x.device.type, enabled=False):
+            scores = (Q[:1].float() @ K[:1].float().transpose(-2, -1)) * scale
+            if mask is not None:
+                scores = scores.masked_fill(~mask[:1], float('-inf'))
+            elif is_causal:
+                scores = scores.masked_fill(
+                    torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device).triu(1), float('-inf'))
+            self.coherence = scores.softmax(dim=-1).max(dim=-1)[0].mean()
 
         return out
 
@@ -1130,11 +1140,11 @@ class COSFOscillatorBlock(nn.Module):
         # Activation: use tanh to keep bounded (Julia stability)
         self.activation = nn.Tanh()
 
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None, causal: bool = False) -> torch.Tensor:
         """Forward pass through oscillator block."""
 
         # Attention with residual
-        attn_out = self.attn(self.ln1(x), mask)
+        attn_out = self.attn(self.ln1(x), mask, causal)
         x = x + self.dropout(attn_out)
 
         # Feed-forward with residual
@@ -1252,17 +1262,13 @@ class COSFOscillatorTransformer(nn.Module):
         # Add resonant positional encoding
         x = self.pos_encoding(x)
 
-        # Causal mask: position i may only attend to positions <= i
-        causal_mask = torch.tril(
-            torch.ones(seq_len, seq_len, device=input_ids.device, dtype=torch.bool)
-        ).view(1, 1, seq_len, seq_len)
-
-        # Apply oscillator blocks
+        # Apply oscillator blocks with causal attention (position i attends to <= i;
+        # no mask tensor, so SDPA can use the flash kernel)
         # (Julia correction is NOT applied here: mutating weights mid-forward
         # corrupts gradients and changed the model during eval/generation.
         # Call apply_julia_correction() after optimizer.step() instead.)
         for block in self.blocks:
-            x = block(x, causal_mask)
+            x = block(x, causal=True)
 
         # Final layer norm
         x = self.ln_f(x)
@@ -1272,54 +1278,56 @@ class COSFOscillatorTransformer(nn.Module):
 
         # Compute loss if targets provided
         if targets is not None:
-            task_loss = F.cross_entropy(
-                logits.view(-1, self.config.vocab_size),
-                targets.view(-1),
-            )
-
-            # Compute Kuramoto coherence loss (AURA LEVEL 1: THE HEARTBEAT)
-            if return_coherence_loss:
-                # Get current drift from first oscillator
-                # Drift = mean distance from rest frequency (φ)
-                first_osc = self.blocks[0].attn.q_oscillator
-                drift = (first_osc.frequencies - first_osc.rest_frequency).abs().mean().item()
-
-                # Older checkpoints pickle a config without the heartbeat fields
-                mode = getattr(self.config, 'heartbeat_mode', 'static')
-                strength = getattr(self.config, 'heartbeat_strength', 0.01)
-                target = getattr(self.config, 'heartbeat_target', None)
-
-                if mode == 'live':
-                    sync_loss, coherence = self.live_heartbeat_loss(drift, strength, target)
-                    return logits, task_loss, sync_loss, coherence
-
-                # Collect all phases from all oscillators
-                # Note: Oscillators have different sizes (d_model vs d_ff)
-                # so we concatenate them into a single phase vector
-                all_phases = []
-                for block in self.blocks:
-                    # Get phases from each oscillator in the block
-                    all_phases.append(block.attn.q_oscillator.phases)
-                    all_phases.append(block.attn.k_oscillator.phases)
-                    all_phases.append(block.attn.v_oscillator.phases)
-                    all_phases.append(block.attn.out_oscillator.phases)
-                    all_phases.append(block.ff1.phases)
-                    all_phases.append(block.ff2.phases)
-
-                # Concatenate all phases into single vector [total_features]
-                # This creates a unified phase space across all oscillators
-                phases_tensor = torch.cat(all_phases)
-
-                # Compute Kuramoto synchronization loss
-                sync_loss, coherence = kuramoto_coherence_loss(
-                    phases_tensor,
-                    drift,
-                    coupling_strength=strength
+            # Losses and the Kuramoto heartbeat always in fp32, outside autocast
+            with torch.autocast(input_ids.device.type, enabled=False):
+                task_loss = F.cross_entropy(
+                    logits.float().view(-1, self.config.vocab_size),
+                    targets.view(-1),
                 )
 
-                return logits, task_loss, sync_loss, coherence
+                # Compute Kuramoto coherence loss (AURA LEVEL 1: THE HEARTBEAT)
+                if return_coherence_loss:
+                    # Get current drift from first oscillator
+                    # Drift = mean distance from rest frequency (φ)
+                    first_osc = self.blocks[0].attn.q_oscillator
+                    drift = (first_osc.frequencies - first_osc.rest_frequency).abs().mean().item()
 
-            return logits, task_loss
+                    # Older checkpoints pickle a config without the heartbeat fields
+                    mode = getattr(self.config, 'heartbeat_mode', 'static')
+                    strength = getattr(self.config, 'heartbeat_strength', 0.01)
+                    target = getattr(self.config, 'heartbeat_target', None)
+
+                    if mode == 'live':
+                        sync_loss, coherence = self.live_heartbeat_loss(drift, strength, target)
+                        return logits, task_loss, sync_loss, coherence
+
+                    # Collect all phases from all oscillators
+                    # Note: Oscillators have different sizes (d_model vs d_ff)
+                    # so we concatenate them into a single phase vector
+                    all_phases = []
+                    for block in self.blocks:
+                        # Get phases from each oscillator in the block
+                        all_phases.append(block.attn.q_oscillator.phases)
+                        all_phases.append(block.attn.k_oscillator.phases)
+                        all_phases.append(block.attn.v_oscillator.phases)
+                        all_phases.append(block.attn.out_oscillator.phases)
+                        all_phases.append(block.ff1.phases)
+                        all_phases.append(block.ff2.phases)
+
+                    # Concatenate all phases into single vector [total_features]
+                    # This creates a unified phase space across all oscillators
+                    phases_tensor = torch.cat(all_phases)
+
+                    # Compute Kuramoto synchronization loss
+                    sync_loss, coherence = kuramoto_coherence_loss(
+                        phases_tensor,
+                        drift,
+                        coupling_strength=strength
+                    )
+
+                    return logits, task_loss, sync_loss, coherence
+
+                return logits, task_loss
 
         return logits
 

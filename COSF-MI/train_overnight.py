@@ -58,6 +58,8 @@ def train_with_gentle_sleep(
     save_every=3000,
     max_steps=0,
     log_every=0,
+    amp_dtype=None,
+    eval_batches=0,
 ):
     """Train model with gentle sleep cycles.
 
@@ -110,8 +112,10 @@ def train_with_gentle_sleep(
                 inputs = inputs.to(device)
                 targets = targets.to(device)
 
-            # Forward with Kuramoto coherence loss (AURA LEVEL 1)
-            logits, task_loss, sync_loss, coherence = model(inputs, targets, return_coherence_loss=True)
+            # Forward with Kuramoto coherence loss (AURA LEVEL 1).
+            # Under bf16 the model keeps oscillators and losses in fp32 itself.
+            with torch.autocast(inputs.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+                logits, task_loss, sync_loss, coherence = model(inputs, targets, return_coherence_loss=True)
 
             # Total loss = task loss + sync loss
             total_loss = task_loss + sync_loss
@@ -141,6 +145,9 @@ def train_with_gentle_sleep(
             if max_steps and global_step >= max_steps:
                 peak = torch.cuda.max_memory_allocated() / 2**30 if inputs.is_cuda else 0.0
                 print(f"Reached --max-steps {max_steps}; stopping early (peak VRAM {peak:.2f} GiB)", flush=True)
+                if eval_batches:
+                    val_loss = evaluate(model, val_loader, device, amp_dtype, max_batches=eval_batches)
+                    print(f"val_loss={val_loss:.4f} (first {eval_batches} val batches)", flush=True)
                 return
 
             # Update progress bar with coherence
@@ -179,7 +186,7 @@ def train_with_gentle_sleep(
         print(f"  Avg train PPL: {math.exp(avg_loss):.2f}")
 
         # Validation
-        val_loss = evaluate(model, val_loader, device)
+        val_loss = evaluate(model, val_loader, device, amp_dtype)
         print(f"  Val loss: {val_loss:.4f}")
         print(f"  Val PPL: {math.exp(val_loss):.2f}")
 
@@ -252,13 +259,17 @@ def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step,
     os.replace(tmp, checkpoint_dir / "latest.pt")
 
 
-def evaluate(model, val_loader, device):
-    """Evaluate model on validation set."""
+def evaluate(model, val_loader, device, amp_dtype=None, max_batches=0):
+    """Evaluate model on validation set (only the first max_batches if > 0)."""
     model.eval()
     total_loss = 0
+    n = 0
 
     with torch.no_grad():
         for batch in val_loader:
+            if max_batches and n >= max_batches:
+                break
+            n += 1
             if isinstance(batch, dict):
                 inputs = batch['input'].to(device)
                 targets = batch['target'].to(device)
@@ -268,11 +279,12 @@ def evaluate(model, val_loader, device):
                 targets = targets.to(device)
 
             # During validation, don't compute coherence loss (saves time)
-            logits, loss = model(inputs, targets, return_coherence_loss=False)
+            with torch.autocast(inputs.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+                logits, loss = model(inputs, targets, return_coherence_loss=False)
             total_loss += loss.item()
 
     model.train()
-    return total_loss / len(val_loader)
+    return total_loss / max(n, 1)
 
 
 def save_checkpoint(model, optimizer, epoch, val_loss, checkpoint_dir, is_best):
@@ -353,6 +365,12 @@ def main():
                         help='Stop after this many optimizer steps (0 = run all epochs; for smoke tests)')
     parser.add_argument('--log-every', type=int, default=0,
                         help='Print a plain "step=N loss=X tok/s=Y" line every N steps (0 = off)')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Seed for model init and dropout (data order is already seeded per epoch)')
+    parser.add_argument('--precision', type=str, default='bf16', choices=['fp32', 'bf16'],
+                        help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
+    parser.add_argument('--eval-batches', type=int, default=0,
+                        help='With --max-steps: report val loss on the first N val batches at the end')
 
     pre, _ = parser.parse_known_args()
     if pre.config:
@@ -430,6 +448,11 @@ def main():
     if device == 'cpu':
         print("WARNING: Training on CPU will be very slow!")
     print()
+
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        print(f"Seed: {args.seed}")
+    print(f"Precision: {args.precision}")
 
     # Create model
     print("Creating model with CHIRALITY enabled...")
@@ -579,6 +602,8 @@ def main():
         save_every=args.save_every,
         max_steps=args.max_steps,
         log_every=args.log_every,
+        amp_dtype=torch.bfloat16 if args.precision == 'bf16' else None,
+        eval_batches=args.eval_batches,
     )
 
     print()
