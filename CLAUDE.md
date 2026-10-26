@@ -65,6 +65,30 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
   (34% apart). `core/constants.py` docstring line 10 repeats the wrong value. Its `CONVERGENCE_RATIO`
   is 1.0 by construction (φ^(ln C / ln φ) = C), so it doesn't check anything.
 
+## Setup status
+Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
+Updated 2026-10-26.
+
+Done:
+- [x] WSL RAM limit: `free -h` shows 23 GiB (`.wslconfig` memory=24GB, mirrored networking).
+- [x] `.claude/settings.local.json`: 48 Windows-era permissions cut to 14 Linux-relevant ones (gitignored, not in the repo).
+  Dropped `timeout:*` (it let any command through unprompted). `git push:*` and `pkill:*` are still allowed; consider removing them.
+- [x] `.wslconfig` has `[experimental] hostAddressLoopback=true` (2026-10-26), in effect since the reboot.
+- [x] Smoke test passes. Baseline (tiny, batch 32×256, 200 steps, fp32, hand-written attention):
+  loss 8.48 → 6.72, ~77k tok/s, ~106 ms/step, **5.24 GiB peak VRAM**.
+
+Open:
+- [ ] **Docker GPU test.** Docker Desktop doesn't autostart; when it's down, `docker` disappears from WSL (it's a symlink into
+  `/mnt/wsl/docker-desktop`). WSL integration for Ubuntu-24.04 is enabled; its first attempt timed out once
+  (`Wsl/Service/0x8007274c`). Then run `docker run --rm --gpus all <cuda image> nvidia-smi`.
+- [ ] **Second opinion via Ollama.** Windows Ollama doesn't autostart either, and it listens only on `127.0.0.1:11434`. Before the
+  reboot, WSL's SYN reached it but no reply came back. `hostAddressLoopback` is meant to fix that and hasn't been verified yet.
+  Check with `curl localhost:11434/api/version` and the `second_opinion_status` tool.
+- [ ] **`gh auth login`**: the user runs it in their own terminal. (git push works through Windows GCM without it.)
+- [ ] **Use more of the 32 GB.** Only 5.24 GiB was used in the smoke test. Measure `big` at batch 32/64/128 with
+  `--max-steps 30` (the first attempt was cut off by a reboot). Bigger batches only fill memory, so the real lever is bf16 autocast plus
+  `F.scaled_dot_product_attention` in both attention blocks, then spend the freed memory on seq_len > 256 or a larger model.
+
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
 - Never commit checkpoints, data, logs, caches, `memory/jarvis/` or `.claude/settings.local.json` (see `.gitignore`).
