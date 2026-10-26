@@ -88,15 +88,32 @@ Done:
   Windows Ollama is quit and disabled at startup: WSL→Windows loopback never worked (SYNs stuck in `SYN_RECEIVED`,
   even with `hostAddressLoopback`), and in mirrored mode the two would fight over port 11434. Don't re-enable it.
   - **Ollama VRAM:** systemd override has `OLLAMA_CONTEXT_LENGTH=8192`, `OLLAMA_KEEP_ALIVE=2m`, `OLLAMA_MAX_LOADED_MODELS=1`.
-    qwen2.5:14b takes **~10 GB** (100% GPU) while loaded and unloads 2 min after the last call. Before a big training
-    run, check `ollama ps`. If the model is loaded, wait out the 2 min or run `ollama stop qwen2.5:14b`, and size batches
-    for ~20 GB if you plan to use the second opinion mid-run. Running the 32b teacher (~20 GB) means no training at the same time.
+    qwen2.5:14b takes **~10 GB** (100% GPU) while loaded and unloads 2 min after the last call. Training has priority:
+    `launch_train.sh` (ml-training skill) runs `ollama stop` on every loaded model and waits for the VRAM to free before
+    its GPU-busy check (tested: 11.9 → 1.4 GB in ~3 s). A second-opinion call *during* a run reloads ~10 GB, so either
+    size batches for ~20 GB or don't use it mid-run. Smoke tests and ad-hoc runs don't go through `launch_train.sh`; for those, run `ollama ps` first. Running the 32b teacher (~20 GB) means no training at the same time.
 
 Open:
 - [ ] **`gh auth login`**: the user runs it in their own terminal. (git push works through Windows GCM without it.)
-- [ ] **Use more of the 32 GB.** Only 5.24 GiB was used in the smoke test. Measure `big` at batch 32/64/128 with
-  `--max-steps 30` (the first attempt was cut off by a reboot). Bigger batches only fill memory, so the real lever is bf16 autocast plus
-  `F.scaled_dot_product_attention` in both attention blocks, then spend the freed memory on seq_len > 256 or a larger model.
+- [x] Batch-size probe (2026-10-26), `big` (41.9M), seq 256, fp32, 30 steps; tok/s is the steady value at step 30:
+
+  | batch | torch peak | device peak | % of 32607 MiB | tok/s |
+  |---|---|---|---|---|
+  | 32 | 9.71 GiB | 12.6 GB | 39% | ~51k |
+  | 64 | 18.88 GiB | 21.7 GB | 67% | ~68.5k |
+  | 72 | 21.18 GiB | 23.3 GB | 72% | ~67-69k |
+  | **80** | **23.47 GiB** | **25.7 GB** | **79%** | **~68.6k** |
+  | 128 | did not fit: spilled to system RAM, 53 s/step | 32.1 GB | | |
+
+  About 0.29 GiB per sample. Throughput plateaus at batch 64, so batch 80 buys memory use and no speed.
+  The 77k smoke baseline is the *tiny* model, so it isn't comparable.
+- [ ] **Sysmem fallback hides OOM.** Past the VRAM limit, the Windows driver pages into system RAM instead of raising
+  `OutOfMemoryError`, so the smoke test's OOM check can't catch it. A run just gets roughly 250× slower. The fix is on Windows (user):
+  NVIDIA Control Panel → Manage 3D settings → *CUDA - Sysmem Fallback Policy* → *Prefer No Sysmem Fallback*; whether it applies to WSL
+  is unverified. Until then, treat step_ms jumping by 100× as an OOM.
+- [ ] **Real speed lever:** bf16 autocast + `F.scaled_dot_product_attention` (`is_causal=True`, `scale=coupling/√d_k` for the
+  φ block) in both attention blocks (`cosf_oscillator.py:468`, `:999`). Keep the phase/coherence maths in fp32. Then spend
+  freed memory on seq_len > 256 or a bigger model. Re-run the probe afterwards.
 
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
