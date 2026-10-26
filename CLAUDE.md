@@ -94,7 +94,8 @@ Done:
     size batches for ~20 GB or don't use it mid-run. Smoke tests and ad-hoc runs don't go through `launch_train.sh`; for those, run `ollama ps` first. Running the 32b teacher (~20 GB) means no training at the same time.
 
 Open:
-- [ ] **`gh auth login`**: the user runs it in their own terminal. (git push works through Windows GCM without it.)
+- [x] `gh auth login` (2026-10-26): logged in as sportysport74 over https (scopes: repo, workflow, gist, read:org).
+  Token files are off-limits to Claude: `~/.claude/settings.json` denies Read/Edit on `~/.config/gh/**` and the HF token files.
 - [x] Batch-size probe (2026-10-26), `big` (41.9M), seq 256, fp32, 30 steps; tok/s is the steady value at step 30:
 
   | batch | torch peak | device peak | % of 32607 MiB | tok/s |
