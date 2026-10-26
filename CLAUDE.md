@@ -45,7 +45,8 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
   `~/.claude/skills/ml-training/scripts/smoke_test.sh configs/smoke.yaml 200`
 - Chat fine-tune and distill: `.venv/bin/python finetune_chat.py --checkpoint checkpoints/smart_big_10ep/best_model.pt --distill data/cosf_distill_verified.jsonl --out checkpoints/<run>`
   - Chat format: `You: <turn> Aura: <reply> ...`. Story replay "sleep" keeps the story skill. The best model is picked on (chat val + distill val)/2.
-- Teacher data: `.venv/bin/python scripts/generate_cosf_distill.py --n 10000` (Ollama `qwen2.5:32b` at localhost:11434. Stop it before training: it needs about 20 GB of VRAM).
+- Teacher data: `.venv/bin/python scripts/generate_cosf_distill.py --n 10000` (Ollama `qwen2.5:32b` at localhost:11434, now the
+  WSL Ollama, which has only qwen2.5:14b pulled so far: `ollama pull qwen2.5:32b` first. Stop it before training: it needs about 20 GB of VRAM).
 - Math eval: `.venv/bin/python experiments/math_eval.py <ckpt> [<ckpt>...]` (120 questions; the last number in the reply is scored).
 - Chat: `.venv/bin/python chat_with_aura.py [checkpoint]` (interactive). With no argument it takes the first existing
   checkpoint from its list, starting with `aura_chat_smart10`. **`aura_chat_distill` isn't in that list**, so pass it explicitly.
@@ -77,13 +78,21 @@ Done:
 - [x] Smoke test passes. Baseline (tiny, batch 32×256, 200 steps, fp32, hand-written attention):
   loss 8.48 → 6.72, ~77k tok/s, ~106 ms/step, **5.24 GiB peak VRAM**.
 
+- [x] Docker GPU test (2026-10-26): `docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi` sees the
+  RTX 5090 (32607 MiB, driver 617.42). Docker Desktop doesn't autostart after a reboot; while it's down, `docker` is missing
+  in WSL (it's a symlink into `/mnt/wsl/docker-desktop`). Start it from Windows first.
+
+- [x] Second opinion via Ollama (2026-10-26): **Ollama now runs inside WSL** (0.40.11, systemd service `ollama`,
+  `127.0.0.1:11434`), with `qwen2.5:14b` pulled. `second_opinion_status()` reports it up, and a real `ask_second_opinion` critic call works.
+  The MCP config (`~/.claude.json`, `OLLAMA_URL=http://localhost:11434`) didn't need changing.
+  Windows Ollama is quit and disabled at startup: WSL→Windows loopback never worked (SYNs stuck in `SYN_RECEIVED`,
+  even with `hostAddressLoopback`), and in mirrored mode the two would fight over port 11434. Don't re-enable it.
+  - **Ollama VRAM:** systemd override has `OLLAMA_CONTEXT_LENGTH=8192`, `OLLAMA_KEEP_ALIVE=2m`, `OLLAMA_MAX_LOADED_MODELS=1`.
+    qwen2.5:14b takes **~10 GB** (100% GPU) while loaded and unloads 2 min after the last call. Before a big training
+    run, check `ollama ps`. If the model is loaded, wait out the 2 min or run `ollama stop qwen2.5:14b`, and size batches
+    for ~20 GB if you plan to use the second opinion mid-run. Running the 32b teacher (~20 GB) means no training at the same time.
+
 Open:
-- [ ] **Docker GPU test.** Docker Desktop doesn't autostart; when it's down, `docker` disappears from WSL (it's a symlink into
-  `/mnt/wsl/docker-desktop`). WSL integration for Ubuntu-24.04 is enabled; its first attempt timed out once
-  (`Wsl/Service/0x8007274c`). Then run `docker run --rm --gpus all <cuda image> nvidia-smi`.
-- [ ] **Second opinion via Ollama.** Windows Ollama doesn't autostart either, and it listens only on `127.0.0.1:11434`. Before the
-  reboot, WSL's SYN reached it but no reply came back. `hostAddressLoopback` is meant to fix that and hasn't been verified yet.
-  Check with `curl localhost:11434/api/version` and the `second_opinion_status` tool.
 - [ ] **`gh auth login`**: the user runs it in their own terminal. (git push works through Windows GCM without it.)
 - [ ] **Use more of the 32 GB.** Only 5.24 GiB was used in the smoke test. Measure `big` at batch 32/64/128 with
   `--max-steps 30` (the first attempt was cut off by a reboot). Bigger batches only fill memory, so the real lever is bf16 autocast plus
