@@ -25,6 +25,7 @@ Usage:
 import argparse
 import os
 import sys
+import time
 import torch
 import math
 from pathlib import Path
@@ -55,6 +56,8 @@ def train_with_gentle_sleep(
     skip_batches=0,
     global_step=0,
     save_every=3000,
+    max_steps=0,
+    log_every=0,
 ):
     """Train model with gentle sleep cycles.
 
@@ -67,6 +70,7 @@ def train_with_gentle_sleep(
     model.train()
     current_epoch = 0
     dataset, batch_size = train_loader.dataset, train_loader.batch_size
+    window_start, window_tokens = time.time(), 0
 
     for epoch in range(start_epoch, num_epochs):
         current_epoch = epoch
@@ -122,6 +126,22 @@ def train_with_gentle_sleep(
 
             epoch_loss += task_loss.item()
             global_step += 1
+
+            # Plain log line (tqdm's \r output is hard to parse from a log file)
+            if log_every:
+                window_tokens += inputs.numel()
+                if global_step % log_every == 0:
+                    torch.cuda.synchronize() if inputs.is_cuda else None
+                    dt = time.time() - window_start
+                    print(f"step={global_step} loss={task_loss.item():.4f} coh={coherence:.3f} "
+                          f"lr={scheduler.get_last_lr()[0]:.2e} step_ms={dt / log_every * 1000:.1f} "
+                          f"tok/s={window_tokens / dt:.0f}", flush=True)
+                    window_start, window_tokens = time.time(), 0
+
+            if max_steps and global_step >= max_steps:
+                peak = torch.cuda.max_memory_allocated() / 2**30 if inputs.is_cuda else 0.0
+                print(f"Reached --max-steps {max_steps}; stopping early (peak VRAM {peak:.2f} GiB)", flush=True)
+                return
 
             # Update progress bar with coherence
             pbar.set_postfix({
@@ -327,7 +347,22 @@ def main():
                         help='Steps between crash-recovery saves (latest.pt)')
     parser.add_argument('--resume', type=str, default=None,
                         help='Checkpoint to resume from (e.g. checkpoints/fixed_run_100ep/checkpoint_epoch_86.pt)')
+    parser.add_argument('--config', type=str, default=None,
+                        help='YAML file of argument defaults (keys like batch_size); command-line flags override it')
+    parser.add_argument('--max-steps', type=int, default=0,
+                        help='Stop after this many optimizer steps (0 = run all epochs; for smoke tests)')
+    parser.add_argument('--log-every', type=int, default=0,
+                        help='Print a plain "step=N loss=X tok/s=Y" line every N steps (0 = off)')
 
+    pre, _ = parser.parse_known_args()
+    if pre.config:
+        import yaml
+        with open(pre.config) as f:
+            defaults = {k.replace('-', '_'): v for k, v in (yaml.safe_load(f) or {}).items()}
+        unknown = set(defaults) - {a.dest for a in parser._actions}
+        if unknown:
+            parser.error(f"unknown keys in {pre.config}: {', '.join(sorted(unknown))}")
+        parser.set_defaults(**defaults)
     args = parser.parse_args()
 
     print()
@@ -542,6 +577,8 @@ def main():
         skip_batches=skip_batches,
         global_step=global_step,
         save_every=args.save_every,
+        max_steps=args.max_steps,
+        log_every=args.log_every,
     )
 
     print()

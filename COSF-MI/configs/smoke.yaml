@@ -1,0 +1,12 @@
+# Tiny smoke-test config for train_overnight.py (keys are its --flags with _ for -).
+# Run: ~/.claude/skills/ml-training/scripts/smoke_test.sh configs/smoke.yaml 200
+model_size: tiny          # d_model 256, 4 layers, 4 heads, d_ff 3072
+data_dir: data/mix        # reads styled_train.txt / styled_val.txt (cached tokens reused)
+tokenizer: models/tokenizer_mix16k.model
+batch_size: 32
+lr: 5.0e-4
+warmup: 20
+epochs: 1
+log_every: 10
+save_every: 1000000       # no crash-recovery saves during a smoke test
+checkpoint_dir: runs/smoke_ckpt
