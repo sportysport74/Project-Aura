@@ -69,6 +69,17 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
+
+**Resume point (paused 2026-10-26, user away; GPU left idle, no jobs, no Ollama model loaded):**
+Branch `sdpa-bf16` (not merged, not pushed) has SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
+measured over 500-step runs only. Next steps, in order:
+1. **Heartbeat loss question (decide before the long run).** With `--heartbeat live --heartbeat-target 0.3`, the loss is
+   `strength·gate·relu(0.3 − R)`, and R sits at ~0.30-0.35 from about step 50, so the heartbeat loss is exactly 0 for most of
+   training. Is that intended (R is free above 0.3), or should the target or strength change? Ask the user; don't change it silently.
+2. **Long validation run on `sdpa-bf16` before merging.** One real-length run (`big`, through `launch_train.sh`, the user picks
+   batch/epochs) with the new defaults, compared against the last known-good eager run on val loss, R (`coh=`) and loss spikes.
+   One compile-fp32 run spiked at step 500 (1 in 12), so watch for spikes. Merge into `main` only if it holds.
+3. **Sync cleanup** (open item below): vectorize the Julia check and drop the per-step `.item()` calls. Re-profile first.
 Updated 2026-10-26.
 
 Done:
