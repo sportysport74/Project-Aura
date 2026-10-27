@@ -1391,33 +1391,18 @@ class COSFOscillatorTransformer(nn.Module):
         """
         if not self.config.apply_phase_correction:
             return
-        for block in self.blocks:
-            self._apply_julia_correction(block)
-
-    def _apply_julia_correction(self, block: COSFOscillatorBlock):
-        """
-        Apply φ-correction to oscillators exceeding Julia bounds.
-
-        If phase velocity |dθ/dt| > 1.5, damp the oscillation.
-        """
-        # Check all oscillators in the block
-        for oscillator in [
-            block.attn.q_oscillator,
-            block.attn.k_oscillator,
-            block.attn.v_oscillator,
-            block.attn.out_oscillator,
-            block.ff1,
-            block.ff2,
-        ]:
-            # Get max phase velocity
-            max_velocity = oscillator.phase_velocity.abs().max().item()
-
-            if max_velocity > self.config.julia_bound:
-                # Apply damping: scale frequencies by 1/φ
-                with torch.no_grad():
-                    oscillator.frequencies.data = oscillator.frequencies.data * (1 / PHI)
-                    self.julia_violations += 1
-                    self.phase_corrections += 1
+        # φ-correction: any oscillator whose max |dθ/dt| exceeds the Julia bound gets its
+        # frequencies scaled by 1/φ. Done for all oscillators at once on the GPU with no
+        # .item(), so it never stalls the CPU; ×1.0 leaves the others bit-identical.
+        oscillators = list(self.live_oscillators())
+        with torch.no_grad():
+            max_velocity = torch.stack(torch._foreach_norm([o.phase_velocity for o in oscillators], ord=float('inf')))
+            exceeded = max_velocity > self.config.julia_bound
+            factors = torch.where(exceeded, 1 / PHI, 1.0).to(oscillators[0].frequencies.dtype)
+            torch._foreach_mul_([o.frequencies for o in oscillators], list(factors.unbind(0)))
+            n = exceeded.sum()
+            self.julia_violations += n
+            self.phase_corrections += n
 
     def get_phase_coherence_metrics(self) -> dict:
         """
