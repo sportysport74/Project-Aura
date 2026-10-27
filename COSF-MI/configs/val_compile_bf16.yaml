@@ -1,0 +1,20 @@
+# sdpa-bf16 validation, arm 1 of 2: the new defaults (SDPA + bf16 + torch.compile), 1 epoch of big.
+# Compare with configs/val_eager_fp32.yaml (same seed, data order and schedule; only the numerics differ).
+# Run: ~/.claude/skills/ml-training/scripts/launch_train.sh configs/val_compile_bf16.yaml
+model_size: big           # d_model 512, 8 layers, 8 heads, d_ff 2048
+data_dir: data/mix        # reads styled_train.txt / styled_val.txt
+tokenizer: models/tokenizer_mix16k.model
+batch_size: 64
+lr: 5.0e-4
+warmup: 200
+epochs: 1                 # cosine schedule completes within the epoch
+seed: 1234
+heartbeat: live
+heartbeat_strength: 0.1
+heartbeat_target: 0.3
+precision: bf16
+compile: true
+matmul_precision: highest
+log_every: 100
+save_every: 3000
+checkpoint_dir: checkpoints/val_compile_bf16

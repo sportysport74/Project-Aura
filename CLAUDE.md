@@ -73,12 +73,15 @@ Linux/WSL migration checklist. **Read this first; tick items off (with date) as 
 **Resume point (paused 2026-10-26, user away; GPU left idle, no jobs, no Ollama model loaded):**
 Branch `sdpa-bf16` (not merged, not pushed) has SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
-1. **Heartbeat loss question (decide before the long run).** With `--heartbeat live --heartbeat-target 0.3`, the loss is
-   `strength·gate·relu(0.3 − R)`, and R sits at ~0.30-0.35 from about step 50, so the heartbeat loss is exactly 0 for most of
-   training. Is that intended (R is free above 0.3), or should the target or strength change? Ask the user; don't change it silently.
-2. **Long validation run on `sdpa-bf16` before merging.** One real-length run (`big`, through `launch_train.sh`, the user picks
-   batch/epochs) with the new defaults, compared against the last known-good eager run on val loss, R (`coh=`) and loss spikes.
-   One compile-fp32 run spiked at step 500 (1 in 12), so watch for spikes. Merge into `main` only if it holds.
+1. [x] **Heartbeat: kept as is** (live, strength 0.1, target 0.3; user decision 2026-10-26). It works as a floor on R:
+   without it R stays ~0.01, it lifts R to ~0.3 by step 60, is 0 while R > 0.3, and switches back on when R drifts down
+   (the old tiny 10k-step A/B ended at R 0.246). Val cost is nil (3.613 vs 3.592-3.613 without), but there's no measured
+   benefit either. Open idea: an A/B with and without it on a capability (math eval or forgetting), not val loss.
+2. **Long validation run on `sdpa-bf16` before merging** (in progress 2026-10-26). 1 epoch of `big` (21,504 steps, batch 64,
+   seed 1234, full cosine schedule), two arms through `launch_train.sh`, one after the other:
+   `configs/val_compile_bf16.yaml` (run `runs/20261026-182317`, ~27 min) then `configs/val_eager_fp32.yaml` (~75 min, launch
+   it by hand after arm 1 exits). Compare the end-of-epoch val loss on all 200 val batches, R (`coh=`) and loss spikes. One compile-fp32
+   500-step run spiked at step 500 (1 in 12), so watch for spikes. Merge into `main` only if it holds.
 3. **Sync cleanup** (open item below): vectorize the Julia check and drop the per-step `.item()` calls. Re-profile first.
 Updated 2026-10-26.
 
