@@ -43,7 +43,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 
 # Golden ratio - the fundamental COSF constant
@@ -1301,7 +1301,7 @@ class COSFOscillatorTransformer(nn.Module):
                     # Get current drift from first oscillator
                     # Drift = mean distance from rest frequency (φ)
                     first_osc = self.blocks[0].attn.q_oscillator
-                    drift = (first_osc.frequencies - first_osc.rest_frequency).abs().mean().item()
+                    drift = (first_osc.frequencies - first_osc.rest_frequency).abs().mean().detach()
 
                     # Older checkpoints pickle a config without the heartbeat fields
                     mode = getattr(self.config, 'heartbeat_mode', 'static')
@@ -1312,6 +1312,7 @@ class COSFOscillatorTransformer(nn.Module):
                         sync_loss, coherence = self.live_heartbeat_loss(drift, strength, target,
                                                                         control=(mode == 'live_control'))
                         return logits, task_loss, sync_loss, coherence
+                    drift = drift.item()  # the static loss below takes a float
 
                     # Collect all phases from all oscillators
                     # Note: Oscillators have different sizes (d_model vs d_ff)
@@ -1381,11 +1382,11 @@ class COSFOscillatorTransformer(nn.Module):
 
     def live_heartbeat_loss(
         self,
-        drift: float,
+        drift: Union[float, torch.Tensor],
         strength: float = 0.01,
         target: Optional[float] = None,
         control: bool = False,
-    ) -> Tuple[torch.Tensor, float]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Heartbeat loss on the live phases, gated by drift like the original.
 
@@ -1393,18 +1394,25 @@ class COSFOscillatorTransformer(nn.Module):
         target=t:    loss = strength·gate·relu(t - R)  (only lift R up to t)
         control=True: the same loss on R_ψ (fixed random offsets, see
         'live_control'); the returned coherence is still the true R.
+
+        drift may be a 0-dim tensor; then nothing here syncs with the GPU. The
+        returned coherence is a detached 0-dim tensor (use float() to read it).
         """
         coherence = self.live_coherence(self.control_offsets if control else None)
-        gate = max(0.0, min(1.0, 1.0 - drift))
+        if torch.is_tensor(drift):
+            # Same arithmetic as the float path: gate·strength in float64, then one fp32 multiply
+            gate_strength = ((1.0 - drift.double()).clamp(0.0, 1.0) * strength).float()
+        else:
+            gate_strength = max(0.0, min(1.0, 1.0 - drift)) * strength
         if target is None:
             shortfall = 1.0 - coherence
         else:
             shortfall = F.relu(target - coherence)
-        loss = gate * strength * shortfall
+        loss = gate_strength * shortfall
         if control:
             with torch.no_grad():
                 coherence = self.live_coherence()  # report the true R, not R_ψ
-        return loss, coherence.item()
+        return loss, coherence.detach()
 
     def apply_julia_correction(self):
         """

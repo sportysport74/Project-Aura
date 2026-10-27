@@ -96,7 +96,8 @@ def train_with_gentle_sleep(
         order = torch.randperm(len(dataset), generator=torch.Generator().manual_seed(1000 + epoch))
         skip = skip_batches if epoch == start_epoch else 0
         epoch_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, sampler=order[skip * batch_size:].tolist(), num_workers=0)
+            dataset, batch_size=batch_size, sampler=order[skip * batch_size:].tolist(), num_workers=0,
+            pin_memory=(device == 'cuda'))  # pinned + non_blocking: the copy doesn't stall the CPU
         if skip:
             print(f"Resuming epoch {epoch + 1} at batch {skip} (global step {global_step})")
         pbar = tqdm(epoch_loader, desc=f"Epoch {epoch+1}/{num_epochs}", ncols=100,
@@ -105,12 +106,12 @@ def train_with_gentle_sleep(
         for batch_idx, batch in enumerate(pbar, start=skip):
             # Get batch
             if isinstance(batch, dict):
-                inputs = batch['input'].to(device)
-                targets = batch['target'].to(device)
+                inputs = batch['input'].to(device, non_blocking=True)
+                targets = batch['target'].to(device, non_blocking=True)
             else:
                 inputs, targets = batch
-                inputs = inputs.to(device)
-                targets = targets.to(device)
+                inputs = inputs.to(device, non_blocking=True)
+                targets = targets.to(device, non_blocking=True)
 
             # Forward with Kuramoto coherence loss (AURA LEVEL 1).
             # Under bf16 the model keeps oscillators and losses in fp32 itself.
@@ -128,7 +129,7 @@ def train_with_gentle_sleep(
             scheduler.step()
             optimizer.zero_grad()
 
-            epoch_loss += task_loss.item()
+            epoch_loss += task_loss.detach().double()  # summed on the GPU (float64, same as the old Python float)
             global_step += 1
 
             # Plain log line (tqdm's \r output is hard to parse from a log file)
@@ -150,17 +151,17 @@ def train_with_gentle_sleep(
                     print(f"val_loss={val_loss:.4f} (first {eval_batches} val batches)", flush=True)
                 return
 
-            # Update progress bar with coherence
-            pbar.set_postfix({
-                'loss': f'{task_loss.item():.4f}',
-                'ppl': f'{math.exp(task_loss.item()):.2f}',
-                'coh': f'{coherence:.3f}',
-            })
-
-            # Check for sleep (every 10 steps to reduce overhead)
+            # Progress bar and sleep check every 10 steps: reading the loss is a GPU sync
             if global_step % 10 == 0:
+                loss_value = task_loss.item()
+                pbar.set_postfix({
+                    'loss': f'{loss_value:.4f}',
+                    'ppl': f'{math.exp(loss_value):.2f}',
+                    'coh': f'{coherence:.3f}',
+                })
+
                 # Custom sleep trigger with gentle mode
-                if sleep_hook.check_and_sleep(model, global_step, task_loss.item()):
+                if sleep_hook.check_and_sleep(model, global_step, loss_value):
                     # Sleep was triggered - apply gentle reset
                     # Note: sleep_hook already called model.apply_homeostatic_reset()
                     # We just need to configure the decay rate
@@ -179,7 +180,7 @@ def train_with_gentle_sleep(
             print()
 
         # Epoch summary
-        avg_loss = epoch_loss / max(1, len(train_loader) - skip)
+        avg_loss = float(epoch_loss) / max(1, len(train_loader) - skip)
         print()
         print(f"Epoch {epoch+1} complete:")
         print(f"  Avg train loss: {avg_loss:.4f}")

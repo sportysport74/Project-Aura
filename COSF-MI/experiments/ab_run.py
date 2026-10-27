@@ -271,7 +271,7 @@ def main():
             c = chirality_vector(model)
             row = {
                 "step": step, "train_loss": task_loss.item(), "val_loss": val_loss,
-                "live_R": live_r, "static_R": static_r, "heartbeat_coh": coh,
+                "live_R": live_r, "static_R": static_r, "heartbeat_coh": float(coh),
                 "chir_abs_mean": c.abs().mean().item(),
                 "chir_flipped": (torch.sign(c) != torch.sign(chir0)).sum().item(),
                 "julia_corrections": julia_total,
