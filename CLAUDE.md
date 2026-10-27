@@ -81,10 +81,22 @@ measured over 500-step runs only. Next steps, in order:
    same seed and config, both compiled. Without the heartbeat, R settles at **0.004** (0.002-0.006 from step 100 on) instead of
    ~0.30. Val **3.1530 vs 3.1094 (+0.044 worse)**, avg train loss 3.6024 vs 3.5404, and the train curve is higher at every point
    from ~step 500 (smoothed gap 0.06 mean, 0.08 max). So at `big` scale the floor helps, unlike the old tiny 10k-step A/B.
-   Caveat: one compiled run per arm (not bit-reproducible). The 1-epoch compile-vs-eager val gap was 0.007, so +0.044 is ~6× that
-   and consistent across the whole curve, but confirm with 2 more seeds per arm before publishing.
-   Unexplained: the no-heartbeat run was slower (181.5k vs 219k tok/s, with the faster sync-free Julia code). Check
-   whether the GPU was shared at the time, or whether strength 0 changes the compiled graph.
+   **Confirmed over 3 seeds (2026-10-27; seeds 2/3 ran back to back, interleaved on/off):**
+
+   | | seed 1234 | seed 2 | seed 3 | mean ± sd |
+   |---|---|---|---|---|
+   | val, heartbeat ON | 3.1094 | 3.1213 | 3.1184 | **3.1164 ± 0.0062** |
+   | val, heartbeat OFF | 3.1530 | 3.1444 | 3.1451 | **3.1475 ± 0.0048** |
+   | paired gap (off − on) | +0.0436 | +0.0231 | +0.0267 | +0.0311 |
+
+   The gap of means (+0.031) is 5.0× the ON-arm seed-to-seed sd and 2.6× its range. All 3 seed pairs point the same way, and the ranges
+   don't overlap (worst ON 3.1213 < best OFF 3.1444). **The heartbeat's R floor improves val by ~0.03 at `big` scale, 1 epoch.**
+   R with the heartbeat off: 0.004-0.006 on every seed. Runs: on s2 `runs/20261027-052255`, off s2 `runs/20261027-054935`,
+   on s3 `runs/20261027-062532`, off s3 `runs/20261027-065319`.
+   **Heartbeat-off is consistently slower:** 181.5k / 186.3k / 186.8k tok/s against 259.7k / 247.4k for heartbeat-on on the same
+   sync-free code (−27%). Not GPU sharing, since the runs were interleaved. Unexplained; the leading guess is that strength 0.0 changes
+   the compiled graph or causes recompiles. Check with `TORCH_LOGS=recompiles,graph_breaks` and a short profile. It only matters for ablations.
+   With the sync-free Julia code, heartbeat-on runs at **~254k tok/s** over a full epoch.
 2. [x] **Validation done (2026-10-26): recommend merging.** 1 epoch of `big`, seed 1234:
 
    | | compile+bf16 (`runs/20261026-182317`) | eager fp32 (`runs/20261026-190304`) |
