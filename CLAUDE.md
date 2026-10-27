@@ -70,8 +70,14 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
-**Resume point (paused 2026-10-26, user away; GPU left idle, no jobs, no Ollama model loaded):**
-Branch `sdpa-bf16` (not merged, not pushed) has SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
+**Resume point (2026-10-27, unattended work done for the user's evening review; GPU idle, nothing running):**
+Nothing merged or pushed since `main` = `01601df`. For review, stacked branches (each builds on the one before):
+`heartbeat-ablation` (`1bd0535`, 3-seed on/off result) → `heartbeat-control` (`28782ed`, `live_control` mode)
+→ `sync-cleanup` (`02a7e1a` code + this status update; checked out in the worktree `~/projects/aura-syncfix`,
+whose `.venv`/`data`/`cache`/tokenizer are symlinks into the main tree). Reviewing `sync-cleanup` covers all three.
+Results today: the control (below) says **synchronization itself is what helps**, and the remaining syncs are gone (+15% tok/s, below).
+
+Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
 1. [x] **Heartbeat: kept as is** (live, strength 0.1, target 0.3; user decision 2026-10-26). It works as a floor on R:
    without it R stays ~0.01, it lifts R to ~0.3 by step 60, is 0 while R > 0.3, and switches back on when R drifts down
@@ -97,6 +103,29 @@ measured over 500-step runs only. Next steps, in order:
    sync-free code (−27%). Not GPU sharing, since the runs were interleaved. Unexplained; the leading guess is that strength 0.0 changes
    the compiled graph or causes recompiles. Check with `TORCH_LOGS=recompiles,graph_breaks` and a short profile. It only matters for ablations.
    With the sync-free Julia code, heartbeat-on runs at **~254k tok/s** over a full epoch.
+   **Control experiment (2026-10-27): is it synchronization, or just an extra loss term?** New mode `--heartbeat live_control`
+   (`heartbeat-control` branch): the identical loss (strength 0.1, drift gate, target 0.3) on R_ψ = |mean_j e^{i(θ_j+ψ_j)}| with
+   fixed random offsets ψ (seed 271828, not saved). It's met by a random phase pattern, so true R stays ~0.
+   Tiny-model check: optimizing only that loss gives R_ψ 0.997 with true R 0.017 (the heartbeat gives true R 0.997). `live` mode is bit-identical to `main`.
+   3 seeds, 1 epoch `big`, same config (`configs/val_compile_bf16.yaml --heartbeat live_control`):
+
+   | arm | seed 1234 | seed 2 | seed 3 | val mean ± sd | true R | tok/s |
+   |---|---|---|---|---|---|---|
+   | heartbeat ON | 3.1094 | 3.1213 | 3.1184 | **3.1164 ± 0.0062** | 0.30 | 219-260k |
+   | heartbeat OFF | 3.1530 | 3.1444 | 3.1451 | 3.1475 ± 0.0048 | 0.004 | 181-187k |
+   | **CONTROL** | 3.1336 | 3.1273 | 3.1791 | **3.1467 ± 0.0283** | 0.004-0.005 | 237-239k |
+
+   Control − ON = **+0.030** (4.9× the ON sd). It's worse on every seed (+0.024, +0.006, +0.061), and the ranges don't overlap
+   (best control 3.1273 > worst ON 3.1213). Control vs OFF: −0.001 mean, so indistinguishable (paired −0.019, −0.017, +0.034).
+   **Conclusion: a heartbeat-shaped loss that doesn't target synchrony doesn't reproduce the gain; synchronization itself is what helps.**
+   Caveats: (1) the control's loss term was **1.65× larger** on average than the heartbeat's (logged `sync=` means 0.000028 vs
+   0.000017, sampled every 100 steps; it took longer to reach its target). More extra loss and less benefit only strengthens the conclusion.
+   (2) Control seed 3 is weak (3.1791): it fell behind by step 500-1000 (6.94 vs 6.88 at 500) and stayed ~0.05 back. It has no instability
+   (gnorm median 0.45, 1% clipped, only the two known hard-batch jumps). Without it, control is still worse than every ON run.
+   (3) The control still constrains each token's phases to a coherent (random) pattern, so this shows alignment matters, not that
+   every coherence-like loss fails. Runs: `runs/20261027-074042` (s1234), `-081106` (s2), `-084020` (s3).
+   **Speed clue:** the control (strength 0.1) runs at full speed (~238k), so the slow heartbeat-OFF runs are specific to
+   `--heartbeat-strength 0`. That supports the guess that strength 0.0 changes the compiled graph (still unverified).
 2. [x] **Validation done (2026-10-26): recommend merging.** 1 epoch of `big`, seed 1234:
 
    | | compile+bf16 (`runs/20261026-182317`) | eager fp32 (`runs/20261026-190304`) |
@@ -119,7 +148,7 @@ measured over 500-step runs only. Next steps, in order:
    `configs/val_compile_bf16.yaml` (run `runs/20261026-182317`, ~27 min) then `configs/val_eager_fp32.yaml` (~75 min, launch
    it by hand after arm 1 exits). Compare the end-of-epoch val loss on all 200 val batches, R (`coh=`) and loss spikes. One compile-fp32
    500-step run spiked at step 500 (1 in 12), so watch for spikes. Merge into `main` only if it holds.
-3. **Sync cleanup** (open item below): vectorize the Julia check and drop the per-step `.item()` calls. Re-profile first.
+3. [x] **Sync cleanup**: Julia check (2026-10-26) and the remaining syncs (2026-10-27), see below.
 Updated 2026-10-26.
 
 Done:
@@ -208,13 +237,20 @@ Open:
   0.064 / val 0.078 vs the same-seed baseline is above the seed spread on a single run. Not worth the phase-precision risk.
 - [x] Julia correction sync-free (2026-10-26, branch `julia-nosync`, `ab9a070`): bit-identical, syncs 55 → 7 per step,
   `big` batch 64 compiled **216k → 240k tok/s** (2 seeds). Compiled profile: 104 → 84 ms/step, GPU busy 56% → 68.5% (26 ms/step idle left).
-- [ ] Remaining syncs (7 per step): `drift.item()` and the
-  heartbeat `coherence.item()` in forward, and the bookkeeping `.item()` calls. Original note: 48 `.item()` in `apply_julia_correction` (done), `drift.item()` and the
-  heartbeat `coherence.item()` in forward (also graph breaks under compile at `cosf_oscillator.py:1293`, `:1383`), and the bookkeeping
-  `.item()` calls every step. Re-profile after compile first: the sync share of the ~75 ms step is now larger.
-- [ ] Data loader workers/pinned memory: ≤1-2%, last.
+- [x] Remaining syncs removed (2026-10-27, branch `sync-cleanup`, `02a7e1a`). In the `live`/`live_control` heartbeat, drift stays a
+  tensor and coherence comes back as a detached 0-dim tensor (callers read it with `float()`/f-strings; `ab_run.py` fixed for JSON).
+  Static mode still takes a float. In the trainer, epoch loss is summed on the GPU in float64; the progress bar and sleep check share one `.item()`
+  every 10 steps; batches come from pinned memory with `non_blocking`. **Bit-identical** to the previous code (loss, sync loss, coherence,
+  every grad) in live, live_control and static modes, with the drift gate open, partial, near the edge (0.98) and clamped (1.5).
+  Real syncs/step 7 → ~1 (that one is the every-10-steps read; the other ~455 `_local_scalar_dense` are AdamW's CPU step counters, no GPU wait).
+  Compiled profile: 83.6 → 73.6 ms/step, GPU busy 68.5% → **83.4%**. **tok/s 255k/257k → 295k/294k (+15%, seeds 1234/2)**, same
+  7.60 GiB peak. Remaining idle (12 ms/step) is mostly launch gaps in backward. Next levers: `torch.compile(mode="reduce-overhead")` (CUDA
+  graphs) and fused AdamW (`fused=True`). Both need an A/B.
+- [x] Data loader pinned memory: done as part of the sync cleanup (the H2D copy no longer stalls). Workers aren't needed (loader idle ~0.5 ms/step).
 - [ ] Spend the freed memory: seq_len > 256 or a bigger model. Re-run the batch-size probe on `sdpa-bf16` first.
-- [ ] Param count mismatch: `big` reports **33.5M** params at start-up, while Known state says 41.9M. Check against a checkpoint.
+- [ ] Param count mismatch, mostly explained: `lm_head` is **tied** to the token embedding (`cosf_oscillator.py`, "Tie embeddings"),
+  so `big` has 33,485,824 unique params. Counting the tied 16,000×512 matrix twice gives 41,677,824 (41.7M), close to the
+  41.9M in Known state. ~0.2M is still unexplained (an older config?). Check against a checkpoint, then fix Known state.
 
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
