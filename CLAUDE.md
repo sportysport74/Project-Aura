@@ -77,6 +77,14 @@ measured over 500-step runs only. Next steps, in order:
    without it R stays ~0.01, it lifts R to ~0.3 by step 60, is 0 while R > 0.3, and switches back on when R drifts down
    (the old tiny 10k-step A/B ended at R 0.246). Val cost is nil (3.613 vs 3.592-3.613 without), but there's no measured
    benefit either. Open idea: an A/B with and without it on a capability (math eval or forgetting), not val loss.
+   **Ablation, 1 epoch `big` (2026-10-26):** `--heartbeat-strength 0` (`runs/20261026-213533`) against arm 1 (`runs/20261026-182317`),
+   same seed and config, both compiled. Without the heartbeat, R settles at **0.004** (0.002-0.006 from step 100 on) instead of
+   ~0.30. Val **3.1530 vs 3.1094 (+0.044 worse)**, avg train loss 3.6024 vs 3.5404, and the train curve is higher at every point
+   from ~step 500 (smoothed gap 0.06 mean, 0.08 max). So at `big` scale the floor helps, unlike the old tiny 10k-step A/B.
+   Caveat: one compiled run per arm (not bit-reproducible). The 1-epoch compile-vs-eager val gap was 0.007, so +0.044 is ~6× that
+   and consistent across the whole curve, but confirm with 2 more seeds per arm before publishing.
+   Unexplained: the no-heartbeat run was slower (181.5k vs 219k tok/s, with the faster sync-free Julia code). Check
+   whether the GPU was shared at the time, or whether strength 0 changes the compiled graph.
 2. [x] **Validation done (2026-10-26): recommend merging.** 1 epoch of `big`, seed 1234:
 
    | | compile+bf16 (`runs/20261026-182317`) | eager fp32 (`runs/20261026-190304`) |
@@ -186,7 +194,10 @@ Open:
   The smoke test (tiny) with the defaults runs at ~260k tok/s, 2.15 GiB peak (was 77k and 5.24 GiB).
 - [x] TF32 for Ω·x (`--matmul-precision high`): **rejected, default stays `highest`.** +4% tok/s only (the step is bound by syncs and launches), and its loss gap
   0.064 / val 0.078 vs the same-seed baseline is above the seed spread on a single run. Not worth the phase-precision risk.
-- [ ] Remove per-step syncs: 48 `.item()` in `apply_julia_correction` (vectorize with `torch.where`), `drift.item()` and the
+- [x] Julia correction sync-free (2026-10-26, branch `julia-nosync`, `ab9a070`): bit-identical, syncs 55 → 7 per step,
+  `big` batch 64 compiled **216k → 240k tok/s** (2 seeds). Compiled profile: 104 → 84 ms/step, GPU busy 56% → 68.5% (26 ms/step idle left).
+- [ ] Remaining syncs (7 per step): `drift.item()` and the
+  heartbeat `coherence.item()` in forward, and the bookkeeping `.item()` calls. Original note: 48 `.item()` in `apply_julia_correction` (done), `drift.item()` and the
   heartbeat `coherence.item()` in forward (also graph breaks under compile at `cosf_oscillator.py:1293`, `:1383`), and the bookkeeping
   `.item()` calls every step. Re-profile after compile first: the sync share of the ~75 ms step is now larger.
 - [ ] Data loader workers/pinned memory: ≤1-2%, last.
