@@ -198,3 +198,6 @@ Open:
 - Never commit checkpoints, data, logs, caches, `memory/jarvis/` or `.claude/settings.local.json` (see `.gitignore`).
   The repo is public: scan new files for secrets before pushing.
 - One GPU: don't run the 32b teacher and training at the same time.
+- **Compiled runs aren't bit-reproducible** (`--compile` is the default): the same seed and config diverge after ~100-200 steps.
+  Eager runs with the same seed are bit-identical. Published or compared results must use `--no-compile`, or report
+  several seeds (mean ± spread), never a single compiled run.
