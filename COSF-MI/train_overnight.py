@@ -137,7 +137,7 @@ def train_with_gentle_sleep(
                 if global_step % log_every == 0:
                     torch.cuda.synchronize() if inputs.is_cuda else None
                     dt = time.time() - window_start
-                    print(f"step={global_step} loss={task_loss.item():.4f} coh={coherence:.3f} "
+                    print(f"step={global_step} loss={task_loss.item():.4f} sync={float(sync_loss):.5f} coh={coherence:.3f} "
                           f"lr={scheduler.get_last_lr()[0]:.2e} step_ms={dt / log_every * 1000:.1f} "
                           f"tok/s={window_tokens / dt:.0f}", flush=True)
                     window_start, window_tokens = time.time(), 0
@@ -371,6 +371,10 @@ def main():
                         help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
     parser.add_argument('--eval-batches', type=int, default=0,
                         help='With --max-steps: report val loss on the first N val batches at the end')
+    parser.add_argument('--matmul-precision', type=str, default='highest', choices=['highest', 'high'],
+                        help="fp32 matmuls (the oscillators' Ω·x): 'highest' = true fp32, 'high' = TF32 tensor cores")
+    parser.add_argument('--compile', action=argparse.BooleanOptionalAction, default=True,
+                        help='torch.compile the model forward in place (checkpoint keys unchanged); --no-compile for eager')
 
     pre, _ = parser.parse_known_args()
     if pre.config:
@@ -452,7 +456,8 @@ def main():
     if args.seed is not None:
         torch.manual_seed(args.seed)
         print(f"Seed: {args.seed}")
-    print(f"Precision: {args.precision}")
+    torch.set_float32_matmul_precision(args.matmul_precision)
+    print(f"Precision: {args.precision}, fp32 matmul precision: {args.matmul_precision}, compile: {args.compile}")
 
     # Create model
     print("Creating model with CHIRALITY enabled...")
@@ -475,6 +480,8 @@ def main():
     )
 
     model = COSFOscillatorTransformer(config).to(device)
+    if args.compile:
+        model.compile()  # nn.Module.compile: state_dict keys stay free of the _orig_mod. prefix
 
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())

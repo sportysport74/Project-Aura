@@ -57,7 +57,8 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 - Last run, `aura_chat_distill`: best (chat+distill)/2 val 1.686; story val 2.79 (was 2.66).
   Math exam 5/120, against 2/120 for smart10. It learned the answer *template* from the teacher but not the arithmetic
   ("The sum of 64 and 88 is 73"; subtraction gets answered as a sum).
-- Smoke run on Linux (tiny, 11.5M params, batch 32×256): about 100 ms/step, ~80k tok/s, 5.2 GiB peak VRAM.
+- Smoke run on Linux (tiny, 11.5M params, batch 32×256), before SDPA/bf16/compile: about 100 ms/step, ~80k tok/s, 5.2 GiB peak VRAM.
+  With the current defaults (bf16 + SDPA + compile): ~30 ms/step, ~260k tok/s, 2.15 GiB.
   That's only ~5.6 TFLOPS: attention was a hand-written softmax in fp32. Branch `sdpa-bf16` replaces it with SDPA + bf16
   (+18% tok/s on `big`; see Setup status). The oscillators must stay fp32, which caps what bf16 can do.
 - Tests: 66 pass. Failing: `tests/test_constants.py` (imports `E_8_6`, removed from `core/constants.py`)
@@ -135,10 +136,29 @@ Open:
   chain (mul/add/cos/sin/sum/neg in fp32) is ~60% of GPU time. `aten::mm` is 26% and runs as fp32 SIMT sgemm, with no tensor cores.
   Flash attention doesn't make the top 15. There are 55 real syncs per step: **48 in `apply_julia_correction`** (one `.item()` per oscillator,
   33 ms CPU blocked), 2 in forward (`drift.item()` and the heartbeat `coherence.item()`, 12 ms), and 3 in bookkeeping. The data loader costs 2.4 ms/step of GPU idle.
-  Order to try (expected gain): (1) remove the per-step syncs: vectorized Julia check, drift/coherence kept as tensors,
-  bookkeeping every `log_every`. This is also needed before torch.compile can capture the forward; (2) `torch.compile` to fuse the oscillator
-  elementwise chain, the biggest lever; (3) TF32/bf16 for the Ω·x matmul, which needs a phase-precision A/B first; (4) loader
-  workers/pinned memory, ≤1-2%.
+  All 144 fp32 `aten::mm` calls are the oscillators' Ω·x (`F.linear(x, handed_freq)` in `COSFOscillatorLayer.forward`): 48 forward
+  plus 96 backward. The other 3 are `lm_head` (already bf16).
+- [x] **torch.compile, now the default** (`--compile`, `--no-compile` for eager; `model.compile()` in place, so checkpoint keys are unchanged
+  and checkpoints load into an eager model, verified). 3-seed matrix (`big`, batch 64, 500 steps, seeds 1234/2/3), each run compared with eager fp32 of the same seed:
+
+  | config | tok/s (mean of 3) | torch peak | R gap 100-500 | loss gap 100-500 | val (mean) |
+  |---|---|---|---|---|---|
+  | eager fp32 | 74.8k | 16.63 GiB | - | - | 5.789 |
+  | eager bf16 | 78.6k | 15.90 GiB | 0.0021 | 0.045 | 5.790 |
+  | **compile bf16** | **215.9k (2.75×)** | **7.60 GiB** | 0.0025 | 0.031 | **5.787** |
+  | compile fp32 | 148.6k | 11.16 GiB | 0.0013 | 0.040 | 5.969* |
+
+  The seed-to-seed spread of eager fp32 (from init alone) is R 0.0024 and loss 0.044, so every gap is inside it. *compile fp32 seed 3
+  spiked at step 500 (train loss 5.65 → 6.51, val 6.29). It's 1 event in 12 runs, cause unknown; that config isn't used. On seed 1234, eager bf16 had
+  shifted R early (0.0043 vs the 0.0011 floor), but seeds 2 and 3 didn't (0.0005, 0.0007), so it wasn't systematic. Note: the
+  heartbeat sync loss is exactly 0 whenever R > target (0.3), which is most of the time after step ~50, so watch R (`coh=`), not `sync=`.
+  The smoke test (tiny) with the defaults runs at ~260k tok/s, 2.15 GiB peak (was 77k and 5.24 GiB).
+- [x] TF32 for Ω·x (`--matmul-precision high`): **rejected, default stays `highest`.** +4% tok/s only (the step is bound by syncs and launches), and its loss gap
+  0.064 / val 0.078 vs the same-seed baseline is above the seed spread on a single run. Not worth the phase-precision risk.
+- [ ] Remove per-step syncs: 48 `.item()` in `apply_julia_correction` (vectorize with `torch.where`), `drift.item()` and the
+  heartbeat `coherence.item()` in forward (also graph breaks under compile at `cosf_oscillator.py:1293`, `:1383`), and the bookkeeping
+  `.item()` calls every step. Re-profile after compile first: the sync share of the ~75 ms step is now larger.
+- [ ] Data loader workers/pinned memory: ≤1-2%, last.
 - [ ] Spend the freed memory: seq_len > 256 or a bigger model. Re-run the batch-size probe on `sdpa-bf16` first.
 - [ ] Param count mismatch: `big` reports **33.5M** params at start-up, while Known state says 41.9M. Check against a checkpoint.
 
