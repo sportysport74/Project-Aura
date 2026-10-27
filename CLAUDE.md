@@ -77,7 +77,24 @@ measured over 500-step runs only. Next steps, in order:
    without it R stays ~0.01, it lifts R to ~0.3 by step 60, is 0 while R > 0.3, and switches back on when R drifts down
    (the old tiny 10k-step A/B ended at R 0.246). Val cost is nil (3.613 vs 3.592-3.613 without), but there's no measured
    benefit either. Open idea: an A/B with and without it on a capability (math eval or forgetting), not val loss.
-2. **Long validation run on `sdpa-bf16` before merging** (in progress 2026-10-26). 1 epoch of `big` (21,504 steps, batch 64,
+2. [x] **Validation done (2026-10-26): recommend merging.** 1 epoch of `big`, seed 1234:
+
+   | | compile+bf16 (`runs/20261026-182317`) | eager fp32 (`runs/20261026-190304`) |
+   |---|---|---|
+   | val loss (all 200 val batches) | **3.1094** | 3.1166 |
+   | avg train loss | 3.5404 | 3.5541 |
+   | median tok/s | **219.2k** | 69.9k |
+   | R after step 1000 | 0.297-0.305 (mean 0.302) | same |
+
+   Smoothed loss gap 0.014 mean / 0.051 max; R gap 0.0002 / 0.0011. Both arms show the same two loss jumps at the same
+   steps (15,900: 2.94→3.51 / 2.94→3.52; 20,300: 2.85→3.36 / 2.86→3.36). They're hard batches, not instability: arm 1's final
+   model scores those exact batches +0.56 and +0.52 above the batch before, the same size as the jumps. The replay with grad norm
+   logged (`runs/20261026-203208`, every 10 steps): gnorm at the jump is 1.12× / 1.02× the median before (0.46 / 0.40, not clipped),
+   loss is back to normal at the next 10-step point, LR is smooth (cosine 74% / 94% through, 7.9e-5 / 3.9e-6), there's no epoch or shard
+   boundary, and no sleep. Grad norm over the run: median 0.44, max 1.40, 0.5% of steps clipped.
+   **Compiled runs aren't bit-reproducible:** the same seed and config diverged from step 200 (eager runs were identical).
+   `train_overnight.py` now logs `gnorm=` (pre-clip) on each log line.
+   Planning notes kept from before the run: 1 epoch of `big` (21,504 steps, batch 64, 1 epoch of `big` (21,504 steps, batch 64,
    seed 1234, full cosine schedule), two arms through `launch_train.sh`, one after the other:
    `configs/val_compile_bf16.yaml` (run `runs/20261026-182317`, ~27 min) then `configs/val_eager_fp32.yaml` (~75 min, launch
    it by hand after arm 1 exits). Compare the end-of-epoch val loss on all 200 val batches, R (`coh=`) and loss spikes. One compile-fp32

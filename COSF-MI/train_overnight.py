@@ -122,7 +122,7 @@ def train_with_gentle_sleep(
 
             # Backward
             total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # pre-clip norm, logged below
             optimizer.step()
             model.apply_julia_correction()  # damping moved out of forward()
             scheduler.step()
@@ -139,7 +139,7 @@ def train_with_gentle_sleep(
                     dt = time.time() - window_start
                     print(f"step={global_step} loss={task_loss.item():.4f} sync={float(sync_loss):.5f} coh={coherence:.3f} "
                           f"lr={scheduler.get_last_lr()[0]:.2e} step_ms={dt / log_every * 1000:.1f} "
-                          f"tok/s={window_tokens / dt:.0f}", flush=True)
+                          f"tok/s={window_tokens / dt:.0f} gnorm={float(grad_norm):.4f}", flush=True)
                     window_start, window_tokens = time.time(), 0
 
             if max_steps and global_step >= max_steps:
