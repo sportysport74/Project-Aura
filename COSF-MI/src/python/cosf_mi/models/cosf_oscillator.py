@@ -156,6 +156,10 @@ class COSFOscillatorConfig:
     # 'static': R over the fixed phase-offset parameters (original Level 1;
     #           same value for every input)
     # 'live':   R over the live per-token phases Ω·x + Θ of every oscillator
+    # 'live_control': control for 'live' that does NOT target synchrony: the same loss
+    #           (strength, gate, target) on R_ψ = |mean_j e^{i(θ_j + ψ_j)}| with fixed
+    #           random offsets ψ_j, so it is met by a random phase pattern (true R ~ 0).
+    #           The logged coherence is still the true R.
     heartbeat_mode: str = 'static'
     heartbeat_strength: float = 0.01  # coupling_strength for the sync loss
     # If set, only penalize R below this target (sync band instead of
@@ -1220,6 +1224,13 @@ class COSFOscillatorTransformer(nn.Module):
         self.register_buffer('julia_violations', torch.tensor(0))
         self.register_buffer('phase_corrections', torch.tensor(0))
 
+        # Fixed random phase offsets ψ for the 'live_control' heartbeat. Drawn from a fixed
+        # seed (independent of the training seed) and not saved, so checkpoint keys don't change.
+        if getattr(config, 'heartbeat_mode', 'static') == 'live_control':
+            n_features = config.n_layers * (5 * config.d_model + config.d_ff)  # q, k, v, out, ff2 + ff1
+            psi = torch.rand(n_features, generator=torch.Generator().manual_seed(271828)) * (2 * math.pi)
+            self.register_buffer('control_offsets', psi, persistent=False)
+
         self._init_weights()
 
         # After _init_weights so the gate keeps its "start at +0.76" init
@@ -1297,8 +1308,9 @@ class COSFOscillatorTransformer(nn.Module):
                     strength = getattr(self.config, 'heartbeat_strength', 0.01)
                     target = getattr(self.config, 'heartbeat_target', None)
 
-                    if mode == 'live':
-                        sync_loss, coherence = self.live_heartbeat_loss(drift, strength, target)
+                    if mode in ('live', 'live_control'):
+                        sync_loss, coherence = self.live_heartbeat_loss(drift, strength, target,
+                                                                        control=(mode == 'live_control'))
                         return logits, task_loss, sync_loss, coherence
 
                     # Collect all phases from all oscillators
@@ -1341,7 +1353,7 @@ class COSFOscillatorTransformer(nn.Module):
             yield block.ff1
             yield block.ff2
 
-    def live_coherence(self) -> torch.Tensor:
+    def live_coherence(self, offsets: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Kuramoto R on the live phases from the last forward pass.
 
@@ -1350,12 +1362,17 @@ class COSFOscillatorTransformer(nn.Module):
         (a differentiable scalar). Unlike the static version, this depends on
         the input: it measures whether the network's oscillators actually
         fall into step while processing text.
+
+        offsets: per-feature phase shifts ψ added before the mean (the
+        'live_control' heartbeat); None gives the true R.
         """
         cos_sum = 0.0
         sin_sum = 0.0
         n_features = 0
         for osc in self.live_oscillators():
             phase = osc.last_total_phase  # [batch, seq, features]
+            if offsets is not None:
+                phase = phase + offsets[n_features:n_features + phase.shape[-1]]
             cos_sum = cos_sum + torch.cos(phase).sum(dim=-1)
             sin_sum = sin_sum + torch.sin(phase).sum(dim=-1)
             n_features += phase.shape[-1]
@@ -1367,20 +1384,27 @@ class COSFOscillatorTransformer(nn.Module):
         drift: float,
         strength: float = 0.01,
         target: Optional[float] = None,
+        control: bool = False,
     ) -> Tuple[torch.Tensor, float]:
         """
         Heartbeat loss on the live phases, gated by drift like the original.
 
         target=None: loss = strength·gate·(1 - R)  (push toward full sync)
         target=t:    loss = strength·gate·relu(t - R)  (only lift R up to t)
+        control=True: the same loss on R_ψ (fixed random offsets, see
+        'live_control'); the returned coherence is still the true R.
         """
-        coherence = self.live_coherence()
+        coherence = self.live_coherence(self.control_offsets if control else None)
         gate = max(0.0, min(1.0, 1.0 - drift))
         if target is None:
             shortfall = 1.0 - coherence
         else:
             shortfall = F.relu(target - coherence)
-        return gate * strength * shortfall, coherence.item()
+        loss = gate * strength * shortfall
+        if control:
+            with torch.no_grad():
+                coherence = self.live_coherence()  # report the true R, not R_ψ
+        return loss, coherence.item()
 
     def apply_julia_correction(self):
         """

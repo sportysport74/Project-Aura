@@ -349,7 +349,7 @@ def main():
                         help='Device (cuda/cpu)')
     parser.add_argument('--warmup', type=int, default=0,
                         help='Linear LR warmup steps (use ~200 with batch 32)')
-    parser.add_argument('--heartbeat', type=str, default='live', choices=['live', 'static'],
+    parser.add_argument('--heartbeat', type=str, default='live', choices=['live', 'static', 'live_control'],
                         help="Kuramoto heartbeat on live per-token phases, or the old static offsets")
     parser.add_argument('--heartbeat-strength', type=float, default=0.1,
                         help='Heartbeat loss weight')
