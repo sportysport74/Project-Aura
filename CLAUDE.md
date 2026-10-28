@@ -253,6 +253,15 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
   "…Each friend would get 54 candies! Yum yum!"). Only 4 are truly wrong (e.g. 71 × 565 = 40015). The filter is right to drop them (format).
   A fix is optional (keep ≥94% anyway): "the playful line goes before the Answer line". Tokens/sample s4: story 162, gsm8k 171, oasst2 104,
   explain 101, chat 85, arith 59. Full run, once allowed: `--target-tokens 50e6 --calibrate-from data/distill_pilot/sample4/stats.json`.
+- [x] **Gate fixed (2026-10-27, user decision):** the story +16.2 was a recovery, not a failure. `scripts/distill/gate.py <run stats> --ref <last
+  accepted stats>` now fails only on keep-rate **drops** > 10 points (plus identity > 0, dup ≥ 10%, "?"-endings ≥ 35%). Checked:
+  s4 vs s3 PASS, s4 vs s2 PASS, s3 vs s2 FAIL (questions, story −17.8). Use it for every future sample run.
+- [ ] **Full run IN PROGRESS** (started 2026-10-27 ~20:55, user-approved, unattended; `c1e1aa8`): detached (nohup/setsid, pid in
+  `data/distill_pilot/full_run.pid`), log `data/distill_pilot/full_run.log`, output `data/distill_pilot/full/` (`kept.jsonl`,
+  `rejected.jsonl`, `stats.json`, `run_config.json`). Calibrated from sample4: **619,092 requests** (arith 255,706, explain 187,208, chat
+  106,854, story 57,830, gsm8k 7,473 ×3 replies, oasst2 4,021) → expected ≈**52.6M kept AURA tokens** (target 50M + 5% margin).
+  The generator stops by itself if any category's near-dup rate goes ≥10%. Estimate ~2-3 h. **Don't start the fine-tune until the user has
+  read sample4** (`data/distill_pilot/sample4/review_20.md`).
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
