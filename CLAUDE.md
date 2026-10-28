@@ -580,10 +580,45 @@ Night 3: full pretrain (~6.5 h). Day 4: distill fine-tune + evals (~1 h).
 - [x] Tokenizer **`models/tokenizer_clean24k`**: SentencePiece BPE 24k, byte fallback, digits split, "\n" one token, specials 0/1/2. 48 s, 2.5 GB RAM.
   **4.55 chars/token vs 4.29** for the old 16k on FineWeb-Edu + Cosmopedia (~6% fewer tokens).
 - [x] Code: `cosf_mi/data/memmap_dataset.py`, `scripts/corpus/{build_corpus,train_tokenizer}.py`, `train_overnight.py --seq-len --corpus` and sizes
-  `s25/m50/l100` (`23a58d6`). **Pending:** `finetune_chat.py --seq-len` (waits until step 0 stops importing it).
-- [ ] Step 0 queue (`scripts/step0_queue.sh`, run `runs/20261028-064058`): 4 arith fine-tunes from `ab_new_s0` (plain/scratch × seeds 0,1) → `ab_eval`
+  `s25/m50/l100` (`23a58d6`). `finetune_chat.py --seq-len` added after step 0 (default 256; refuses a window above the checkpoint's
+  `max_seq_len`, which is 256 for every 33M checkpoint; 20-step test at 128 OK).
+- [x] Step 0 queue (`scripts/step0_queue.sh`, run `runs/20261028-064058`): 4 arith fine-tunes from `ab_new_s0` (plain/scratch × seeds 0,1) → `ab_eval`
   → decoding check (`--bs 16`). Data: `data/arith_format/{plain,scratch}` (same 150k problems; ops + 71k, − 64k, ÷ 8k, × 7k; 63k 3-digit ×
   scratchpads dropped as too long, so the battery's × 3-digit cell can't be learned in this test).
+  **Done 08:07, no CUDA error (peak 8,771 MiB with the logger on).** Results: `experiments/results/arith_format/summary.md`, `readable.md`.
+
+  | battery cell (2 seeds) | plain | scratch |
+  |---|---|---|
+  | + 1 / 2 / 3-digit | 85 / 99 / 96% | 37 / 99 / 85% |
+  | − 1 / 2 / 3-digit | 57 / 96 / 79% | 37 / 96 / 81% |
+  | × (all cells) | 0-1% | 0-3% |
+  | ÷ 1-digit / 2-digit divisor | 14 / 15% | 5 / 0% |
+  | ALL 410 | **49%** (51, 48) | 42% (41, 42) |
+  | math_eval exam (of 120) | **14** (14, 15) | 1 |
+
+  **Decision rule: neither branch fires.** Plain alone reaches 96-99% on +/− 2-digit and 79-96% on 3-digit (rule: plain ≤ 30%), so it's **not
+  format and not capacity at 33M for +/−: it was data.** In the distill A/B, ft_v1 had arith at 22% of tokens, thinned unevenly by the quip filter,
+  wrapped in playful text; ~135k clean +/− problems fix carrying. Scratchpad costs 3× the tokens and is worse on 1-digit, ÷ and the exam.
+  Why 1-digit is low: **the training set has no 1-digit +/− at all** (+ is 2×2 7k / 3×3 64k; − 2×2 3k / 3×3 61k). Scratch runs its column template on
+  "4 + 7" and invents a tens column; plain just guesses. × (7k, 2×2 only) and ÷ (8k, mostly 3-4 ÷ 2 digits) were too thin to test. Scratch
+  failures there are **single-digit fact errors** ("5 × 3 + 2 = 13", "48 ÷ 6 = 7"), so the model doesn't know its times tables.
+  **Recommendation:** plain format, not scratchpad, for the corpus's arithmetic slot, with full coverage: 1-digit facts and times tables, balanced
+  + − × ÷, 1-4 digits. × and ÷ need their own test with ~50k each (≈20 min GPU) before calling them capacity.
+  Side effect: the arith-only fine-tune breaks chat (greedy: turn ended 57% / 42%, down from 96%; repeated 4-gram 68% / 77%). Expected for a narrow
+  fine-tune; these checkpoints are test probes, not for use. Story val didn't get worse (2.78 → 2.75).
+  **Decoding check** (`experiments/results/ab_distill/decoding/summary.md`; ~400 prompts × 2 samples, T 0.7): replies with a repeated 4-gram:
+
+  | | greedy | top-k 40 | top-p 0.9 | top-p 0.9 + rep 1.15 |
+  |---|---|---|---|---|
+  | NEW (s0, s1) | 57 / 55% | 31 / 34% | 37 / 39% | **6 / 7%** |
+  | OLD (s0, s1) | 5 / 5% | 3 / 2% | 3 / 3% | 1 / 1% |
+  | ref aura_chat_distill | 4% | 2% | 3% | 1% |
+
+  **Most of the looping is decoding:** the repetition penalty takes NEW from 57% to 6%, and plain sampling halves it. **The content is still
+  the model's problem:** the loop-free replies are simile soup ("Volcanoes are like tiny, invisible friends who can't do it!"). NEW stays ~10×
+  OLD under every setting, and its replies are ~4× longer (59 vs 15 words), so per-word it's closer. **Side effect of rep 1.15:** NEW's "?"
+  endings on chat/explain jump from 6% to 64%. The penalty (over prompt + reply) pushes away from "." after a few sentences, so it changes the
+  reply's shape and isn't a free fix.
 - **CUDA driver error in the first step-0 queue (run `runs/20261028-062703`, crashed ~06:34:56):** `torch.AcceleratorError: CUDA error: unknown
   error` / `CUDA_ERROR_UNKNOWN from cuMemcpyDtoHAsync_v2` in `ab_eval.generate` (decoding check, `new_s0`, top-p + repetition-penalty setup, batch 64).
   - **Peak VRAM right before:** not continuously sampled (that queue had no logger). Spot readings: **32,035 MiB at ~06:29 and 32,028 MiB at ~06:33

@@ -136,6 +136,7 @@ def val_loss(model, x, y, device, bs=32, amp_dtype=None):
 
 
 def main():
+    global SEQ
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--data", default="data/tinychat/tinychat_80mb.txt")
@@ -166,9 +167,11 @@ def main():
                    help="torch.compile the model in place (checkpoint keys unchanged); --no-compile for eager")
     p.add_argument("--max-steps", type=int, default=0,
                    help="stop after this many steps, keeping the full-run LR schedule (0 = run all; for A/B checks)")
+    p.add_argument("--seq-len", type=int, default=SEQ, help="training window (tokens); must fit the model's max_seq_len")
     p.add_argument("--log-every", type=int, default=0,
                    help='print a plain "step=N loss=X sync=Y coh=Z tok/s=T gnorm=G" line every N steps (0 = off)')
     args = p.parse_args()
+    SEQ = args.seq_len  # build_chat_tensors, count_truncated and the story set all read the module-level window
     if args.pilot and args.distill:
         p.error("--pilot and --distill are separate recipes; pick one")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -178,6 +181,8 @@ def main():
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model = COSFOscillatorTransformer(ckpt["config"]).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
+    if SEQ > ckpt["config"].max_seq_len:
+        p.error(f"--seq-len {SEQ} exceeds the model's max_seq_len {ckpt['config'].max_seq_len}")
     print(f"Base model: {args.checkpoint} (story val loss {ckpt['val_loss']:.4f})")
     amp = torch.bfloat16 if args.precision == "bf16" else None
     if args.compile:
