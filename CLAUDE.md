@@ -202,6 +202,32 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
   Open before the full run: GSM8K replies got longer with "few short steps". Proposed: 3 samples per question, keep the shortest
   correct one within 240 tokens. Some stories stop mid-plot under the 100-word cap and some still overrun it. Small teacher factual errors exist
   (unfilterable). **Full 50M run not started; waiting for approval.**
+- [x] **Third 2,000-sample check, `data/distill_pilot/sample3/`** (2026-10-27, `47de4eb`). Voice per the user: "Aura is curious and
+  playful: enthusiastic about ideas, light gentle humor, notices interesting details, sometimes a short follow-up question (at most about 1 in 4),
+  humor never at the expense of being correct", in the persona for every category, and math gets "at most one short playful line". GSM8K: 3 replies per
+  question, keep the shortest correct one that fits. Stories: the teacher judges ENDED/UNFINISHED (temperature 0), and UNFINISHED is rejected
+  (`no_ending`). New stat: % of kept replies ending in a question. Full-run sizing now uses token shares calibrated from a sample's
+  stats (`--calibrate-from`), because sample 2 averaged ~80 AURA tokens/sample, not the 150 assumed (50M would have yielded only ~30M).
+
+  | category | keep s2 → s3 | Δ pts | dup | identity | **ends in "?"** | rejects (s3) |
+  |---|---|---|---|---|---|---|
+  | arith | 97.6% → 96.8% | −0.8 | 1.4% | 0% | 0% | wrong 9, exact_dup 7 |
+  | chat | 100% → 100% | 0 | 0% | 0% | **80.6%** | none |
+  | explain | 99.2% → 99.7% | +0.5 | 0% | 0% | **61.1%** | too_long 2 |
+  | gsm8k | 71.7% → 73.3% | +1.7 | 0% | 0% | 0% | too_long 13, latex 11, wrong 8 |
+  | oasst2 | 93.8% → 90.0% | −3.7 | 0% | 0% | **59.7%** | too_long 5, truncated 2, code 1 |
+  | story | 99.1% → **81.2%** | **−17.8** | 0% | 0% | **35.0%** | too_long 43, no_ending 17 |
+
+  **Gate: FAIL, so the full run was NOT started** (rule: identity 0%, dup < 10%, keep within 10 points, "?"-endings < 35% in every
+  category). Failed: question endings in chat/explain/oasst2/story, and the story keep rate −17.8. Causes found:
+  1. "At most about 1 in 4" can't be followed: each reply is generated independently and never sees the others, so the teacher asks in most replies.
+     **Proposed fix: decide in code per request.** ~25% of non-math requests get "end with one short follow-up question", the rest get
+     "don't end with a question"; stories never end with a question.
+  2. The `no_ending` rejects are mostly **false positives caused by (1)**: the stories end ("From then on, they weren't afraid of the dark
+     anymore.") and then add "What do you think happened next?", which the judge reads as unfinished.
+  3. The playful voice makes stories longer: kept median 109 words (asked ≤100); too_long rejects median 175 words. **Proposed: "70-90 words"**.
+  4. GSM8K: best-of-3 barely helped (73.3%): too_long 13 and LaTeX 11 (up from 5; the voice?). Proposed: "write × or *, never LaTeX".
+  Tokens/sample in s3: story 174, gsm8k 169, oasst2 110, explain 104, chat 81, arith 45. Waiting for the user.
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
