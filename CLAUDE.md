@@ -166,6 +166,24 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
   fine-tune ~1 h (`finetune_chat.py` is still eager fp32, ~70k tok/s; 50M tokens ≈ 12 min/epoch × 3 plus evals); evals ~20 min.
   **Total ≈ 4-5 h** for the 50M pilot, ~7 h for 100M. Teacher generation dominates. Training on 50M tokens is cheap.
 
+**Pilot progress (plan approved 2026-10-27 with additions; branch `distill-investigation`):**
+- [x] `finetune_chat.py` ported to compile + bf16 (`ccbf09a`). A/B, 500 steps from `smart_big_10ep` with the old distill blend: compile+bf16
+  vs eager fp32 same seed: loss gap 0.005 mean / 0.013 max, val gaps chat 0.0013 / story 0.0019 / distill 0.0026. Noise floor (fp32
+  seed 1 vs 0): 0.025 / 0.101 and 0.0027 / 0.0054 / 0.0039. R identical (0.32). **53k → 186k tok/s (3.5×), 11.9 → 8.0 GB.**
+  New flags: `--precision`, `--compile/--no-compile`, `--max-steps`, `--log-every`, and **`--split-seed`** (the distill val split no longer
+  changes with `--seed`; 0 = the split `aura_chat_distill` used). Needed for the 2-seed fine-tune A/B.
+- [x] `guard_bash.py` false positive fixed (shlex punctuation mode) + `~/.claude/hooks/test_guard_bash.py` (39 cases, all pass).
+- [x] Generator `scripts/distill/generate_pilot.py` and `prepare_sources.py`. Sources in `data/distill_sources/` (gitignored, licence
+  in each `SOURCE.txt`); prompt JSONL in `data/distill_pilot/`. AURA-token counting matches `finetune_chat.encode_chat` exactly
+  (0 mismatches on 800 real replies). Run: `VLLM_USE_FLASHINFER_SAMPLER=0 ~/venvs/vllm/bin/python -I scripts/distill/generate_pilot.py`.
+- [x] **Sample run (2,000 candidates, 0.5 min generation + ~3 min model load):** kept 1,817 (0.17M AURA tokens).
+  **Identity filter rejection rate: 0.0% overall and in every category** (the Aura persona system prompt is enough).
+  Near-dup rate: arith 0.6% (3 exact), every other category 0.0%. Keep rates: arith 95%, explain 99.5%, chat 100%, **story 62% (120/320
+  too long for the 240-token budget)**, gsm8k 78% (24 wrong answers at n=1), oasst2 89%. 20 random samples:
+  `data/distill_pilot/sample/review_20.md`. Issues found: stories run long, GSM8K replies use LaTeX `\( p \)`, OASST2 brings in
+  technical/code prompts and one invented fact ("My system time is 2:45 PM"), and arithmetic sometimes skips the working.
+  Proposed fixes are waiting for the user's call before the full run.
+
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
 1. [x] **Heartbeat: kept as is** (live, strength 0.1, target 0.3; user decision 2026-10-26). It works as a floor on R:
