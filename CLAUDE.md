@@ -466,6 +466,19 @@ Open:
   requests gave identical outputs; fixed with per-request seeds. Note: some subtopics are adult or off-scope ("Solar energy policy").
 - [x] Stage 2, 2,000-sample reply check (`data/distill_pilot/sample5/`): **gate PASS** vs sample4 (drops only). Keep: arith 90.4 (−3.6),
   chat 99.4, explain 99.7, gsm8k 69.2, oasst2 90.0, story 93.4 (−4.1); dup ≤0.2%; identity 0%; "?" chat 28.9 / explain 24.3 / oasst2 29.2%.
-- [ ] **Full reply generation RUNNING** (started ~21:45, pid in `data/distill_pilot/full_run.pid`, log `full_run.log`, output
-  `data/distill_pilot/full/`): 618,429 requests, all unique prompts from the pool. It stops by itself on a near-dup rate ≥10%.
-  Afterwards: record the final stats here. **Don't start the fine-tune until the user has read sample4.**
+- [x] **Full reply generation DONE** (2026-10-27 21:40 → 2026-10-28 00:13, 152 min, no early stop; `data/distill_pilot/full/`:
+  `kept.jsonl` 590 MB, `rejected.jsonl`, `stats.json`, `run_config.json`): 618,429 requests (every prompt unique) → **584,706 samples,
+  59.25M AURA tokens**. Identity rejects 0%. Dup ≤0.3% everywhere.
+
+  | category | kept | AURA tokens | share | keep | dup | ends in "?" |
+  |---|---|---|---|---|---|---|
+  | arith | 228,166 | 19.19M | 32% | 89.2% | 0.3% | 0% |
+  | explain | 186,131 | 19.35M | 33% | 99.7% | 0.1% | 26.7% |
+  | chat | 106,302 | 10.31M | 17% | 99.6% | 0.3% | 27.5% |
+  | story | 54,906 | 9.05M | 15% | 94.9% | 0% | 0% |
+  | gsm8k | 5,403 | 0.94M | 2% | 72.3% | 0% | 0% |
+  | oasst2 | 3,798 | 0.42M | 1% | 94.5% | 0.1% | 26.9% |
+
+  More than the planned 52.4M because arith replies grew to 84 tokens/sample (calibrated: 59) with the wider ranges and the playful line,
+  so arith is 32% of tokens, not ~25%. To get the planned mix, subsample arith to ~13M tokens when building the fine-tune set.
+  **Next (needs the user): read sample4/sample5, then the fine-tune A/B** (≥2 seeds per arm vs the old `aura_chat_distill` re-scored with current code).
