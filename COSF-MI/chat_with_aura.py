@@ -24,6 +24,7 @@ from cosf_mi.data.tokenizer import BPETokenizer
 
 
 DEFAULT_CHECKPOINTS = [
+    "checkpoints/aura_chat_distill/best_model.pt",  # default (user decision 2026-10-28): smart10 + old qwen2.5:32b distill
     "checkpoints/aura_chat_smart10/best_model.pt",  # chat model on the 10-epoch mix base (chat val 1.879)
     "checkpoints/aura_chat_smart/best_model.pt",  # chat model on the big mix-pretrained base (wiki/web/textbook/code/math)
     "checkpoints/aura_chat_mid2/best_model.pt",   # mid chat model, malformed [INST] turns removed

@@ -1,0 +1,1 @@
+step0: decoding check + arithmetic-format test (plain vs scratch, 2 seeds) from ab_new_s0

@@ -50,7 +50,8 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
   WSL Ollama, which has only qwen2.5:14b pulled so far: `ollama pull qwen2.5:32b` first. Stop it before training: it needs about 20 GB of VRAM).
 - Math eval: `.venv/bin/python experiments/math_eval.py <ckpt> [<ckpt>...]` (120 questions; the last number in the reply is scored).
 - Chat: `.venv/bin/python chat_with_aura.py [checkpoint]` (interactive). With no argument it takes the first existing
-  checkpoint from its list, starting with `aura_chat_smart10`. **`aura_chat_distill` isn't in that list**, so pass it explicitly.
+  checkpoint from its list. **Default chat checkpoint: `aura_chat_distill`** (user decision 2026-10-28; added first in the list, before
+  `aura_chat_smart10`). The distill A/B's ft_v1 models are not a replacement at 33M (they loop in chat).
 - Tests: `.venv/bin/python -m pytest tests`
 
 ## Known state (2026-10-25)
@@ -535,6 +536,10 @@ bottleneck at 33M was *format*: put scratchpad arithmetic into the distill/pretr
 | FineMath-4+ (HuggingFaceTB/finemath) | ODC-By | 34B (3+) | ~10% |
 | Our licence-clean distill data (Qwen2.5-7B, Apache-2.0) + programmatic arithmetic (scratchpad if test 0 wins) | Apache-2.0 / ours | 59M + unlimited | ~5% |
 
+**ODC-By covers the dataset collection, not the underlying web text** (user note 2026-10-28): it licenses the compilation with an
+attribution requirement. The pages themselves keep their original authors' rights (FineWeb/FineWeb-Edu/FineMath are CommonCrawl
+extracts, also subject to CommonCrawl's terms of use). So ODC-By makes the *collection* usable commercially with attribution, but it
+isn't a guarantee for every page in it. Attribute each dataset in the model/corpus card. Cosmopedia's text is model output (Mixtral, Apache-2.0).
 Excluded or flagged: **Wikipedia (CC BY-SA 3.0 + GFDL, share-alike)**, OpenWebMath (no licence on its card), Project Gutenberg (PD in the US only, strip
 the PG trademark headers), Python-Edu (per-file code licences), TinyStories/TinyChat (GPT-generated; TinyChat is NC). Download ~6-8 GB of parquet shards,
 not whole datasets. Record every source + licence in the run config and a corpus card.

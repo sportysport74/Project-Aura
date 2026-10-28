@@ -91,8 +91,12 @@ def rate_prompts(chat_val_lines, pilot_by_cat):
 # --------------------------------------------------------------------------- generation
 
 @torch.no_grad()
-def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40, seed=0, bs=64):
-    """[(reply, ended)] per prompt; ended = the model wrote "You:" (its turn is over) before the cap."""
+def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40, seed=0, bs=64, top_p=None,
+             rep_penalty=1.0):
+    """[(reply, ended)] per prompt; ended = the model wrote "You:" (its turn is over) before the cap.
+    Sampling: temperature, then top_k (0 = off), then top_p (None = off). rep_penalty > 1 is the CTRL/HF-style penalty on
+    every token already in the context (prompt + reply so far): positive logits divided by it, negative ones multiplied.
+    The defaults (top-k 40, no top-p, no penalty) are what the A/B report used."""
     dev = next(model.parameters()).device
     user_ids, aura_ids = tok.encode(ft.USER), tok.encode(ft.AURA)
     k = len(user_ids)
@@ -111,12 +115,23 @@ def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40
             if all(done) or T >= SEQ:
                 break
             logits = model(buf[:, :T])[torch.arange(B, device=dev), pos - 1].float()
+            if rep_penalty != 1.0:
+                ctx_mask = torch.arange(T, device=dev)[None, :] < pos[:, None]  # ignore right padding
+                seen = torch.zeros_like(logits, dtype=torch.bool)
+                seen.scatter_(1, torch.where(ctx_mask, buf[:, :T], buf[:, :1]), True)
+                logits = torch.where(seen, torch.where(logits > 0, logits / rep_penalty, logits * rep_penalty), logits)
             if greedy:
                 nxt = logits.argmax(-1)
             else:
                 logits = logits / temperature
-                kth = torch.topk(logits, top_k, dim=-1).values[:, -1:]
-                logits[logits < kth] = -float("inf")
+                if top_k:
+                    kth = torch.topk(logits, top_k, dim=-1).values[:, -1:]
+                    logits[logits < kth] = -float("inf")
+                if top_p is not None:
+                    srt, idx = torch.sort(logits, dim=-1, descending=True)
+                    cum = torch.softmax(srt, -1).cumsum(-1)
+                    drop = cum - torch.softmax(srt, -1) > top_p  # keep the smallest set reaching top_p (always >= 1 token)
+                    logits = logits.scatter(1, idx, srt.masked_fill(drop, -float("inf")))
                 nxt = torch.multinomial(torch.softmax(logits, -1), 1, generator=g)[:, 0]
             nxt_l = nxt.tolist()
             for i in range(B):

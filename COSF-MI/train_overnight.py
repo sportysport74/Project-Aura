@@ -23,6 +23,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src" / "python"))
 from cosf_mi.models.cosf_oscillator import COSFOscillatorTransformer, COSFOscillatorConfig
 from cosf_mi.data.tokenizer import BPETokenizer
 from cosf_mi.data.token_dataset_fast import create_datasets_fast
+from cosf_mi.data.memmap_dataset import load_corpus
 from cosf_mi.training.sleep_cycle import SleepCycleHook
 
 
@@ -316,7 +318,7 @@ def main():
 
     # Model args
     parser.add_argument('--model-size', type=str, default='tiny',
-                        choices=['tiny', 'mid', 'big', 'small', 'medium'],
+                        choices=['tiny', 'mid', 'big', 'small', 'medium', 's25', 'm50', 'l100'],
                         help='Model size')
 
     # Training args
@@ -372,6 +374,10 @@ def main():
                         help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
     parser.add_argument('--eval-batches', type=int, default=0,
                         help='With --max-steps: report val loss on the first N val batches at the end')
+    parser.add_argument('--seq-len', type=int, default=256, help='Context length (model positions and data windows)')
+    parser.add_argument('--corpus', type=str, default=None,
+                        help='Pre-tokenized corpus dir (train.bin/val.bin/meta.json, scripts/corpus/tokenize_corpus.py); '
+                             'replaces --data-dir and --tokenizer')
     parser.add_argument('--matmul-precision', type=str, default='highest', choices=['highest', 'high'],
                         help="fp32 matmuls (the oscillators' Ω·x): 'highest' = true fp32, 'high' = TF32 tensor cores")
     parser.add_argument('--compile', action=argparse.BooleanOptionalAction, default=True,
@@ -420,6 +426,10 @@ def main():
         'big': {'d_model': 512, 'n_layers': 8, 'n_heads': 8, 'd_ff': 2048},
         'small': {'d_model': 768, 'n_layers': 12, 'n_heads': 12},
         'medium': {'d_model': 1024, 'n_layers': 16, 'n_heads': 16},
+        # Scaling sweep (plan 2026-10-28), d_ff = 4·d_model, head dim 64. Unique params with a 24k vocab:
+        's25': {'d_model': 384, 'n_layers': 8, 'n_heads': 6, 'd_ff': 1536},     # 23.5M
+        'm50': {'d_model': 512, 'n_layers': 12, 'n_heads': 8, 'd_ff': 2048},    # 50.2M
+        'l100': {'d_model': 768, 'n_layers': 12, 'n_heads': 12, 'd_ff': 3072},  # 103.7M
     }
 
     model_config = model_configs[args.model_size]
@@ -460,6 +470,13 @@ def main():
     torch.set_float32_matmul_precision(args.matmul_precision)
     print(f"Precision: {args.precision}, fp32 matmul precision: {args.matmul_precision}, compile: {args.compile}")
 
+    corpus_meta = None
+    if args.corpus:  # a pre-tokenized corpus brings its own tokenizer
+        corpus_meta = json.loads((Path(args.corpus) / "meta.json").read_text())
+        args.tokenizer = corpus_meta["tokenizer"]
+        print(f"Corpus: {args.corpus} ({corpus_meta['train_tokens']:,} train tokens), tokenizer {args.tokenizer}")
+    print(f"Sequence length: {args.seq_len}")
+
     # Create model
     print("Creating model with CHIRALITY enabled...")
     config = COSFOscillatorConfig(
@@ -468,7 +485,7 @@ def main():
         n_layers=model_config['n_layers'],
         n_heads=model_config['n_heads'],
         d_ff=model_config.get('d_ff', 3072),
-        max_seq_len=256,
+        max_seq_len=args.seq_len,
         homeostatic_decay_rate=0.01,
         enable_homeostasis=True,
         enable_refractory=False,
@@ -497,14 +514,18 @@ def main():
     print("Loading data...")
     tokenizer = BPETokenizer(args.tokenizer)
 
-    # Use styled TinyStories data for overnight training
-    train_dataset, val_dataset = create_datasets_fast(
-        train_path=f"{args.data_dir}/styled_train.txt",
-        val_path=f"{args.data_dir}/styled_val.txt",
-        tokenizer=tokenizer,
-        seq_len=256,
-        cache_dir="cache/tokenized_styled",
-    )
+    if args.corpus:
+        # Pre-tokenized uint16 memmap corpus (scripts/corpus/tokenize_corpus.py): stays on disk, not in RAM
+        train_dataset, val_dataset, _ = load_corpus(args.corpus, args.seq_len)
+    else:
+        # Styled TinyStories data (the original pretraining mix)
+        train_dataset, val_dataset = create_datasets_fast(
+            train_path=f"{args.data_dir}/styled_train.txt",
+            val_path=f"{args.data_dir}/styled_val.txt",
+            tokenizer=tokenizer,
+            seq_len=args.seq_len,
+            cache_dir="cache/tokenized_styled",
+        )
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
