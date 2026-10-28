@@ -46,9 +46,13 @@ TEACHER = "Qwen/Qwen2.5-7B-Instruct"
 TEACHER_LICENSE = "Apache-2.0 (Copyright 2024 Alibaba Cloud)"
 
 PERSONA = ("You are Aura, a small, friendly AI who lives on a home computer and is still learning. "
-           "Aura is curious and playful: enthusiastic about ideas, with light, gentle humor, and you notice interesting "
-           "details. Sometimes you end with a short follow-up question, but in at most about one reply in four. "
+           "Aura is curious and playful. Show it with vivid comparisons, by noticing a fun or surprising detail, with a "
+           "light joke, or with enthusiasm, not by asking questions. The tone, for example: "
+           "'A volcano is like a giant pot of soup that gets too hot and bubbles over.' / "
+           "'Fun fact: a group of owls is called a parliament, as if they hold meetings!' / "
+           "'Bread rises because tiny yeast critters burp out gas. Rude, but tasty!' "
            "Humor never comes at the expense of being correct. "
+           "Don't make up memory tricks or mnemonics unless they clearly make sense; when unsure, leave them out. "
            "Use short sentences and everyday words. No jargon: if you need a special word, explain it simply. "
            "Write plain text only: no LaTeX, no code, no markdown headings. "
            "You can't see a clock, the internet or the news, so never make up times, dates or current events. "
@@ -57,13 +61,21 @@ FINAL = ("then finish with a last line 'Answer: <number>' with just the number. 
          "with at most one short playful line.")
 SYSTEM = {
     "arith": f"{PERSONA} Solve the problem. Write the calculation as an equation (for example: 252 - 59 = 193), {FINAL}",
-    "gsm8k": f"{PERSONA} Solve the problem in a few short steps, writing each calculation as a plain equation, {FINAL}",
-    "story": f"{PERSONA} Tell a short, gentle story for a young child in at most 100 words. No title, no 'Answer:' line.",
+    "gsm8k": (f"{PERSONA} Solve the problem in a few short steps, writing each calculation as a plain equation. "
+              f"Never use LaTeX: write × or * for times and / for divided by, {FINAL}"),
+    "story": (f"{PERSONA} Tell a short, gentle story for a young child in 70 to 90 words, with a clear ending. "
+              "Do not end with a question. No title, no 'Answer:' line."),
     "explain": f"{PERSONA} Answer helpfully and simply in at most 100 words. No 'Answer:' line.",
     "oasst2": f"{PERSONA} Answer helpfully and simply in at most 100 words. No 'Answer:' line.",
     "chat": f"{PERSONA} Reply like a warm, friendly companion in one to three short sentences. No 'Answer:' line.",
 }
 MATH = {"arith", "gsm8k"}
+# Whether a reply ends with a follow-up question is decided here per request, not left to the teacher: each reply
+# is generated alone, so "at most 1 in 4" can't be followed (sample3: 60-81% of replies ended in a question).
+ASK_CATEGORIES = {"chat", "explain", "oasst2"}
+ASK_RATE = 0.25
+ASK_YES = " End your reply with one short, natural follow-up question."
+ASK_NO = " Do not ask any question; end with a statement."
 LATEX = re.compile(r"\\\(|\\\[|\\frac|\\times|\\cdot|\$\$")
 CODE = re.compile(r"```|^\s*\$ |^\s*sudo\s", re.M)  # code fences and shell prompts, not every line starting "cd"
 # OASST2 prompts that need code, a terminal or real-time facts are skipped (out of scope for AURA)
@@ -331,6 +343,7 @@ def main():
         "teacher": TEACHER, "teacher_license": TEACHER_LICENSE, "method": "sequence-level (text) distillation",
         "system_prompts": SYSTEM, "prompt_writer": PROMPT_WRITER, "story_judge": [JUDGE_SYSTEM, JUDGE_USER],
         "gsm8k_samples_per_question": GSM8K_SAMPLES, "calibrated_from": args.calibrate_from,
+        "followup_question": {"rate": ASK_RATE, "categories": sorted(ASK_CATEGORIES), "yes": ASK_YES, "no": ASK_NO},
         "temperature": args.temperature, "top_p": args.top_p,
         "max_new_tokens": args.max_new_tokens, "max_aura_tokens": args.max_aura_tokens, "seed": args.seed,
         "candidates_per_category": want, "max_dup_rate": args.max_dup_rate,
@@ -369,6 +382,8 @@ def main():
                 + [dict(g, category="gsm8k") for g in gsm[:want["gsm8k"]]]
                 + [dict(o, category="oasst2") for o in oas[:want["oasst2"]]])
     rng.shuffle(requests)
+    for r in requests:
+        r["ask"] = r["category"] in ASK_CATEGORIES and rng.random() < ASK_RATE
 
     def check(r, reply, finish):
         """First failing filter (None if it passes) and the AURA token count."""
@@ -412,7 +427,9 @@ def main():
 
         for i in range(0, len(requests), args.chunk):
             part = requests[i:i + args.chunk]
-            convs = [[{"role": "system", "content": SYSTEM[r["category"]]}, {"role": "user", "content": r["prompt"]}]
+            convs = [[{"role": "system", "content": SYSTEM[r["category"]]
+                       + ((ASK_YES if r["ask"] else ASK_NO) if r["category"] in ASK_CATEGORIES else "")},
+                      {"role": "user", "content": r["prompt"]}]
                      for r in part]
             sps = [sp2_gsm if r["category"] == "gsm8k" else sp2 for r in part]
             # Phase 1: filters on every output; GSM8K keeps the shortest of its passing replies
@@ -453,7 +470,8 @@ def main():
                 kept_n[c] += 1
                 kept_tokens[c] += n_tok
                 stats[c]["kept_question"] += ends_with_question(reply)
-                fk.write(json.dumps({"category": c, "source": r["source"], "prompt_license": r["license"],
+                stats[c]["kept_ask_assigned"] += r["ask"]
+                fk.write(json.dumps({"category": c, "source": r["source"], "prompt_license": r["license"], "followup_asked": r["ask"],
                                      "teacher": TEACHER, "teacher_license": TEACHER_LICENSE, "aura_tokens": n_tok,
                                      "prompt": r["prompt"], "reply": reply,
                                      "line": f"[INST] {r['prompt']} [/INST] {reply}"}) + "\n")
