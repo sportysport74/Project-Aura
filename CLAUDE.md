@@ -458,3 +458,14 @@ Open:
 - **Compiled runs aren't bit-reproducible** (`--compile` is the default): the same seed and config diverge after ~100-200 steps.
   Eager runs with the same seed are bit-identical. Published or compared results must use `--no-compile`, or report
   several seeds (mean ± spread), never a single compiled run.
+
+### Distill full run attempt 2 (2026-10-27, two-stage pipeline, `d92b932`)
+- [x] Stage 1, full-scale prompt pool (`scripts/distill/build_pool.py`, `data/distill_pilot/pool/`): **POOL GATE PASS**. Survival: arith
+  100%, explain 99.7% (186,613/187,208), chat 99.9% (106,786/106,854), story, gsm8k and oasst2 100%. 7,117 subtopics from 250 topics; top
+  subtopic ≤0.015%, top topic 0.49%. Expected ≈52.4M AURA tokens. Root cause of attempt 1's collapse: one shared vLLM seed, so identical
+  requests gave identical outputs; fixed with per-request seeds. Note: some subtopics are adult or off-scope ("Solar energy policy").
+- [x] Stage 2, 2,000-sample reply check (`data/distill_pilot/sample5/`): **gate PASS** vs sample4 (drops only). Keep: arith 90.4 (−3.6),
+  chat 99.4, explain 99.7, gsm8k 69.2, oasst2 90.0, story 93.4 (−4.1); dup ≤0.2%; identity 0%; "?" chat 28.9 / explain 24.3 / oasst2 29.2%.
+- [ ] **Full reply generation RUNNING** (started ~21:45, pid in `data/distill_pilot/full_run.pid`, log `full_run.log`, output
+  `data/distill_pilot/full/`): 618,429 requests, all unique prompts from the pool. It stops by itself on a near-dup rate ≥10%.
+  Afterwards: record the final stats here. **Don't start the fine-tune until the user has read sample4.**
