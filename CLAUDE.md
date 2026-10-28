@@ -183,6 +183,25 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
   `data/distill_pilot/sample/review_20.md`. Issues found: stories run long, GSM8K replies use LaTeX `\( p \)`, OASST2 brings in
   technical/code prompts and one invented fact ("My system time is 2:45 PM"), and arithmetic sometimes skips the working.
   Proposed fixes are waiting for the user's call before the full run.
+- [x] **Fixes applied (2026-10-27, user-approved):** one persona for every category, now with "short sentences, everyday words, no jargon",
+  plain text only (no LaTeX/code/markdown headings) and "can't see a clock, the internet or the news". Voice: neutral (warm and friendly;
+  the user's voice placeholder was left unfilled). Story ≤100 words. Arithmetic: "write the calculation as an equation". GSM8K: "a few
+  short steps, plain equations". New reply filters `latex` and `code`. OASST2 prompts needing code/terminal/real-time facts are dropped up
+  front (4,021 of 4,603 kept). **Second 2,000-sample check** (`data/distill_pilot/sample2/`, 20 samples in `review_20.md`): kept 1,941.
+  Identity rejects 0.0% again.
+
+  | category | keep (run 1 → run 2) | dup | rejects in run 2 |
+  |---|---|---|---|
+  | story | 62.2% → **99.1%** | 0.3% | too_long 2, near_dup 1 (avg 207 → 141 AURA tokens) |
+  | arith | 95.4% → **97.6%** | 1.4% | wrong 5 (was 20), exact_dup 7 |
+  | oasst2 | 88.8% → **93.8%** | 0% | too_long 3, code 1, truncated 1 |
+  | explain | 99.6% → 99.2% | 0.1% | too_long 4, exact_dup 1 |
+  | chat | 100% → 100% | 0% | none |
+  | gsm8k | 77.5% → **71.7%** | 0% | wrong 14 (was 24), **too_long 15 (was 3)**, latex 5 |
+
+  Open before the full run: GSM8K replies got longer with "few short steps". Proposed: 3 samples per question, keep the shortest
+  correct one within 240 tokens. Some stories stop mid-plot under the 100-word cap and some still overrun it. Small teacher factual errors exist
+  (unfilterable). **Full 50M run not started; waiting for approval.**
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:

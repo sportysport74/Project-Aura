@@ -14,7 +14,7 @@ Categories (prompt source, licence):
   story    templated story requests: character x situation x setting (ours).
 
 Every reply is written as "Aura" (per-category system prompt with the Aura persona) and goes through:
-  truncated (hit max tokens) -> identity (mentions Qwen / Alibaba / "language model" / "as an AI")
+  truncated (hit max tokens) -> identity (mentions Qwen / Alibaba / "language model" / "as an AI") -> latex -> code
   -> format ([INST] markers) -> answer (math: 'Answer: N' must match; others: no 'Answer:' line)
   -> too_long (conversation > --max-aura-tokens, encoded exactly as finetune_chat.py does)
   -> exact_dup / near_dup (MinHash-LSH over reply word 5-grams, estimated Jaccard >= 0.7, per category).
@@ -46,19 +46,27 @@ TEACHER = "Qwen/Qwen2.5-7B-Instruct"
 TEACHER_LICENSE = "Apache-2.0 (Copyright 2024 Alibaba Cloud)"
 
 PERSONA = ("You are Aura, a small, friendly AI who lives on a home computer and is still learning. "
-           "You speak in simple, clear English. Never say who made you, and never mention any company, "
-           "model or product name.")
-MATH_RULE = ("Solve the problem. Show the working in one or two short sentences, then finish with a last line "
-             "'Answer: <number>' with just the number.")
+           "Use short sentences and everyday words. No jargon: if you need a special word, explain it simply. "
+           "Write plain text only: no LaTeX, no code, no markdown headings. "
+           "You can't see a clock, the internet or the news, so never make up times, dates or current events. "
+           "Never say who made you, and never mention any company, model or product name.")
+FINAL = "then finish with a last line 'Answer: <number>' with just the number."
 SYSTEM = {
-    "arith": f"{PERSONA} {MATH_RULE}",
-    "gsm8k": f"{PERSONA} {MATH_RULE}",
-    "story": f"{PERSONA} Tell a short, gentle story for a young child in at most 150 words. No title, no 'Answer:' line.",
-    "explain": f"{PERSONA} Answer helpfully and simply in at most 100 words. No headings, no 'Answer:' line.",
-    "oasst2": f"{PERSONA} Answer helpfully and simply in at most 100 words. No headings, no 'Answer:' line.",
+    "arith": f"{PERSONA} Solve the problem. Write the calculation as an equation (for example: 252 - 59 = 193), {FINAL}",
+    "gsm8k": f"{PERSONA} Solve the problem in a few short steps, writing each calculation as a plain equation, {FINAL}",
+    "story": f"{PERSONA} Tell a short, gentle story for a young child in at most 100 words. No title, no 'Answer:' line.",
+    "explain": f"{PERSONA} Answer helpfully and simply in at most 100 words. No 'Answer:' line.",
+    "oasst2": f"{PERSONA} Answer helpfully and simply in at most 100 words. No 'Answer:' line.",
     "chat": f"{PERSONA} Reply like a warm, friendly companion in one to three short sentences. No 'Answer:' line.",
 }
 MATH = {"arith", "gsm8k"}
+LATEX = re.compile(r"\\\(|\\\[|\\frac|\\times|\\cdot|\$\$")
+CODE = re.compile(r"```|^\s*\$ |^\s*sudo\s", re.M)  # code fences and shell prompts, not every line starting "cd"
+# OASST2 prompts that need code, a terminal or real-time facts are skipped (out of scope for AURA)
+TECH_PROMPT = re.compile(r"\b(code|coding|program|python|javascript|java|c\+\+|rust|sql|regex|html|css|linux|ubuntu|arch|"
+                         r"windows|terminal|command|install|compile|api|docker|git|excel|function|script|bash|server|"
+                         r"database|json|current time|today'?s date|what time is it|latest news|stock price|weather today)\b",
+                         re.I)
 
 # Share of AURA tokens per category in a full run (GSM8K and OASST2 are capped by their pool sizes:
 # one kept reply per prompt, since several replies to one prompt are near-duplicates of each other).
@@ -280,7 +288,9 @@ def main():
     # How many candidates per category
     total = args.sample if args.sample else int(args.target_tokens / AVG_AURA_TOKENS * 1.25)  # +25% for rejects
     gsm = [json.loads(line) for line in open(ROOT / "data/distill_pilot/src_gsm8k.jsonl")]
-    oas = [json.loads(line) for line in open(ROOT / "data/distill_pilot/src_oasst2.jsonl")]
+    oas_all = [json.loads(line) for line in open(ROOT / "data/distill_pilot/src_oasst2.jsonl")]
+    oas = [o for o in oas_all if not TECH_PROMPT.search(o["prompt"])]
+    print(f"OASST2: {len(oas):,} of {len(oas_all):,} prompts kept after dropping code/tech/real-time ones", flush=True)
     want = {c: max(1, round(total * s)) for c, s in SHARES.items()}
     want["gsm8k"] = min(want["gsm8k"], len(gsm))
     want["oasst2"] = min(want["oasst2"], len(oas))
@@ -350,6 +360,10 @@ def main():
                     reason = "identity"
                 elif "INST]" in reply or "INST]" in r["prompt"]:
                     reason = "format"
+                elif LATEX.search(reply):
+                    reason = "latex"
+                elif CODE.search(reply):
+                    reason = "code"
                 elif c in MATH:
                     m = ANSWER.findall(reply)
                     try:
