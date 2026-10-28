@@ -1,0 +1,1 @@
+--checkpoint checkpoints/smart_big_10ep/best_model.pt --split-seed 0 --log-every 50 --conversations 200000 --pilot data/distill_pilot/ft_v1 --eval-every 500 --seed 1 --out checkpoints/ab_new_s1

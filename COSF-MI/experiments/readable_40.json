@@ -1,0 +1,54 @@
+{
+  "note": "Fixed 40-prompt readable set for the distill A/B (10 per category). The maths triples are excluded from fine-tune data by build_finetune_set.py.",
+  "chat": [
+    "Hi Aura! How are you today?",
+    "I had a really bad day at school.",
+    "What's your favorite color?",
+    "Can you be my friend?",
+    "I'm bored. What should I do?",
+    "My dog is sick and I'm worried about him.",
+    "Do you ever get tired?",
+    "I just learned to ride a bike!",
+    "What do you like to do for fun?",
+    "Good night, Aura!"
+  ],
+  "explain": [
+    "Why is the sky blue?",
+    "How do plants make their food?",
+    "What is a volcano?",
+    "Why do we need to sleep?",
+    "How does a rainbow form?",
+    "What makes thunder?",
+    "Why does ice float on water?",
+    "How do bees make honey?",
+    "What is gravity?",
+    "Why do leaves change color in the fall?"
+  ],
+  "story": [
+    "Tell me a short story about a brave little turtle.",
+    "Can you tell me a bedtime story about a dragon who is afraid of fire?",
+    "Write a story about a girl who finds a magic pencil.",
+    "Tell me a funny story about a cat who wants to fly.",
+    "Tell me a story about two friends who build a sandcastle.",
+    "Can you tell me a story about a little cloud that wants to rain?",
+    "Write a short story about a puppy's first snow day.",
+    "Tell me a story about a robot who learns to dance.",
+    "Tell me a cozy story about a bear who bakes bread.",
+    "Can you tell me a story about a mouse who saves the day?"
+  ],
+  "maths": [
+    "What is 47 + 38?",
+    "What is 93 - 57?",
+    "What is 12 × 7?",
+    "What is 144 ÷ 12?",
+    "What is 356 + 278?",
+    "What is 25 × 14?",
+    "Sam has 23 marbles and gets 19 more. How many marbles does Sam have now?",
+    "A baker makes 6 trays with 12 cookies on each tray. How many cookies is that?",
+    "Lily had 50 stickers and gave away 18. How many stickers are left?",
+    "Tom buys 3 books for 4 dollars each and pays with a 20 dollar bill. How much change does he get?"
+  ],
+  "maths_gold": [85, 36, 84, 12, 634, 350, 42, 72, 32, 8],
+  "maths_triples": [["+", 47, 38], ["-", 93, 57], ["*", 12, 7], ["/", 144, 12], ["+", 356, 278], ["*", 25, 14],
+                    ["+", 23, 19], ["*", 6, 12], ["-", 50, 18], ["*", 3, 4], ["-", 20, 12]]
+}

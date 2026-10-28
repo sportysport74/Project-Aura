@@ -141,6 +141,9 @@ def main():
     p.add_argument("--data", default="data/tinychat/tinychat_80mb.txt")
     p.add_argument("--distill", default=None,
                    help="verified teacher data (.jsonl) to blend in, e.g. data/cosf_distill_verified.jsonl")
+    p.add_argument("--pilot", default=None,
+                   help="fine-tune set dir from scripts/distill/build_finetune_set.py: train on its train.jsonl only "
+                        "(no TinyChat; TinyChat val is still scored) and keep the model that's best on its val.jsonl")
     p.add_argument("--distill-share", type=float, default=0.3, help="fraction of training conversations from --distill")
     p.add_argument("--distill-max-repeats", type=int, default=4, help="max times each distill sample is reused")
     p.add_argument("--conversations", type=int, default=100000)
@@ -166,6 +169,8 @@ def main():
     p.add_argument("--log-every", type=int, default=0,
                    help='print a plain "step=N loss=X sync=Y coh=Z tok/s=T gnorm=G" line every N steps (0 = off)')
     args = p.parse_args()
+    if args.pilot and args.distill:
+        p.error("--pilot and --distill are separate recipes; pick one")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -189,7 +194,13 @@ def main():
     n_val = max(500, len(lines) // 50)
     print(f"Tokenizing {len(lines):,} conversations...")
     chat_train = lines[n_val:]
-    dval_x = None
+    dval_x = pval_x = None
+    if args.pilot:
+        read = lambda f: [json.loads(l)["line"] for l in open(Path(args.pilot) / f, encoding="utf-8")]  # noqa: E731
+        chat_train, p_val = read("train.jsonl"), read("val.jsonl")
+        print(f"  pilot: {len(chat_train):,} train, {len(p_val):,} held out (TinyChat is val only); "
+              f"{count_truncated(tok, chat_train)} longer than {SEQ} tokens")
+        pval_x, pval_y = build_chat_tensors(tok, p_val)
     if args.distill:
         d_train, d_val, keep, repeats = load_distill(args.distill, args.distill_share, len(chat_train),
                                                      args.distill_max_repeats, args.split_seed)
@@ -234,14 +245,23 @@ def main():
     story_before = val_loss(model, story_vx, story_vy, device, amp_dtype=amp)
     chat_before = val_loss(model, val_x, val_y, device, amp_dtype=amp)
     distill_before = val_loss(model, dval_x, dval_y, device, amp_dtype=amp) if dval_x is not None else None
+    pilot_before = val_loss(model, pval_x, pval_y, device, amp_dtype=amp) if pval_x is not None else None
     print(f"Before: chat val {chat_before:.4f}  story val {story_before:.4f}"
-          + (f"  distill val {distill_before:.4f}" if dval_x is not None else ""))
+          + (f"  distill val {distill_before:.4f}" if dval_x is not None else "")
+          + (f"  pilot val {pilot_before:.4f}" if pval_x is not None else ""))
     last = min(steps, args.max_steps) if args.max_steps else steps  # the LR schedule still spans all `steps`
     print(f"Training {last:,} of {steps:,} steps (batch {args.batch_size}, lr {args.lr}, "
           f"replay {'every ' + str(args.sleep_every) if args.sleep_every else 'off'})")
 
     out = ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
+    run_config = dict(vars(args), steps=steps, train_conversations=len(train_x))
+    if args.pilot:  # rule: record the distillation teacher and its licence per run
+        report = json.loads((Path(args.pilot) / "report.json").read_text())
+        run_config.update(teacher=report["teacher"], teacher_license=report["teacher_license"])
+    elif args.distill:
+        run_config.update(teacher="Qwen/Qwen2.5-32B-Instruct (Ollama qwen2.5:32b)", teacher_license="Apache-2.0")
+    (out / "run_config.json").write_text(json.dumps(run_config, indent=1), encoding="utf-8")
     best = float("inf")
     t0 = time.time()
     window_start, window_tokens = time.time(), 0
@@ -278,6 +298,7 @@ def main():
             chat = val_loss(model, val_x, val_y, device, amp_dtype=amp)
             story = val_loss(model, story_vx, story_vy, device, amp_dtype=amp)
             distill = val_loss(model, dval_x, dval_y, device, amp_dtype=amp) if dval_x is not None else None
+            pilot = val_loss(model, pval_x, pval_y, device, amp_dtype=amp) if pval_x is not None else None
             mins = (time.time() - t0) / 60
             rate = step / max(1.0, time.time() - t0)
             left = (last - step) / rate / 60
@@ -286,20 +307,24 @@ def main():
                   f"{rate:.2f}it/s, loss={loss.item():.4f}]", flush=True)
             print(f"step {step}: chat val {chat:.4f}  story val {story:.4f} "
                   f"(story change {story - story_before:+.4f})  liveR {coh:.3f}  {mins:.1f} min"
-                  + (f"  distill val {distill:.4f}" if distill is not None else ""), flush=True)
+                  + (f"  distill val {distill:.4f}" if distill is not None else "")
+                  + (f"  pilot val {pilot:.4f}" if pilot is not None else ""), flush=True)
             print(f"  Val loss: {chat:.4f}", flush=True)
-            # with distill data, keep the model that's best on both kinds of chat
-            score = chat if distill is None else (chat + distill) / 2
+            # with distill data, keep the model that's best on both kinds of chat; with --pilot, on the pilot val
+            score = pilot if pilot is not None else chat if distill is None else (chat + distill) / 2
             if score < best:
                 best = score
                 torch.save({"config": ckpt["config"], "model_state_dict": model.state_dict(),
                             "epoch": 0, "val_loss": chat, "story_val_loss": story, "distill_val_loss": distill,
+                            "pilot_val_loss": pilot, "pilot": args.pilot,
                             "chat_format": {"user": USER, "aura": AURA},
                             "base_checkpoint": args.checkpoint}, out / "best_model.pt")
 
-    print(f"Done. Best {'(chat+distill)/2' if dval_x is not None else 'chat'} val {best:.4f} "
+    crit = "pilot" if pval_x is not None else "(chat+distill)/2" if dval_x is not None else "chat"
+    print(f"Done. Best {crit} val {best:.4f} "
           f"(chat was {chat_before:.4f}"
-          + (f", distill was {distill_before:.4f}" if dval_x is not None else "") + "); "
+          + (f", distill was {distill_before:.4f}" if dval_x is not None else "")
+          + (f", pilot was {pilot_before:.4f}" if pval_x is not None else "") + "); "
           f"story val {story:.4f} (was {story_before:.4f}). Saved to {out / 'best_model.pt'}")
 
 

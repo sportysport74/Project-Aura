@@ -452,6 +452,9 @@ Open:
 
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
+- **Plan for possible commercial use** (decided 2026-10-28): every new dataset, teacher and model choice must allow commercial use.
+  Flag non-commercial (CC-BY-NC), share-alike (CC BY-SA), "research only" terms and closed-model outputs before using them.
+  Today's base and chat data (TinyStories, TinyChat) already fail this, so the next pretrain must use a clean corpus.
 - Never commit checkpoints, data, logs, caches, `memory/jarvis/` or `.claude/settings.local.json` (see `.gitignore`).
   The repo is public: scan new files for secrets before pushing.
 - One GPU: don't run the 32b teacher and training at the same time.
@@ -482,3 +485,84 @@ Open:
   More than the planned 52.4M because arith replies grew to 84 tokens/sample (calibrated: 59) with the wider ranges and the playful line,
   so arith is 32% of tokens, not ~25%. To get the planned mix, subsample arith to ~13M tokens when building the fine-tune set.
   **Next (needs the user): read sample4/sample5, then the fine-tune A/B** (≥2 seeds per arm vs the old `aura_chat_distill` re-scored with current code).
+
+### Distill fine-tune A/B (2026-10-28; built in a second session `fatba-bf`, handed over to this one)
+- **Fine-tune set `data/distill_pilot/ft_v1`** (`scripts/distill/build_finetune_set.py`; report copied to
+  `experiments/results/ab_distill/ft_v1_build_report.md`): from the 584,706-sample run, simile openers capped at 30% per category (they were in
+  42-64% of explain/chat/arith replies), repeated arith/gsm8k quips ("Sure thing", candies, piles…) thinned to ≤1% each, and arith problems used
+  by any eval dropped (133). Val: 2,000 per category (gsm8k 300, oasst2 200). **Train: 316,502 samples / 34.22M AURA tokens.** Shares: explain
+  34.4, story 25.5, **arith 22.0 (user accepted, target was 25)**, chat 14.8, gsm8k 2.5, oasst2 0.9%. The quip thinning removed 51% of arith, so the op
+  mix is skewed (÷ 31%, + 25%, × 13%).
+- **New eval tools:** `experiments/arith_battery.py` (410 held-out problems in 11 cells), `experiments/readable_40.json`, `experiments/ab_eval.py`
+  (frozen val sets, battery, the 120-question `math_eval`, readable side-by-side, repetition/turn-ending stats; `--base` scores the base model),
+  `scripts/ft_ab_queue.sh` + `configs/ft_ab/*.args`. `finetune_chat.py --pilot DIR` trains on DIR/train.jsonl only (no TinyChat) and picks the best on
+  pilot val.
+- **Design:** both arms start from `smart_big_10ep`, with the same recipe (batch 32, lr 1e-4, 1 epoch, replay sleep, compile + bf16, `--split-seed 0`), seeds 0 and 1.
+  NEW = ft_v1 only (licence-clean, 9,890 steps). OLD = the exact `aura_chat_distill` recipe retrained (TinyChat + old distill at 30%, 3,949 steps;
+  it reproduces 1.686 (chat+distill)/2, the original's value). Reference = the original `aura_chat_distill` re-scored (chat 1.878,
+  distill 1.491, story 2.789). Results: `experiments/results/ab_distill/summary.md`, `readable.md`. Run `runs/20261028-051938`.
+
+  | | NEW (s0, s1) | OLD (s0, s1) | ref |
+  |---|---|---|---|
+  | **arith battery, all 410** | **13% (12, 14)** | 1% (1, 1) | 1% |
+  | + 2-digit / − 2-digit | 26% / 45% | 1% / 0% | 2% / 0% |
+  | × and ÷ (all cells) | 0-2% | 0-3% | 0-3% |
+  | readable maths correct (of 10, greedy) | 2 (3, 2) | 0 | 0 |
+  | math_eval exam (of 120, legacy format) | 2 (2, 3) | 2 (1, 4) | 5 |
+  | **story val (base 2.6602)** | 2.7814 (**+0.121**) | 2.7890 (+0.129) | 2.7893 |
+  | replies with a repeated 4-gram (greedy / sampled) | **56% / 21%** | 5% / 2% | 4% / 1% |
+  | mean words per reply | 47 | 14 | 13 |
+
+  TinyChat val (new 3.39 vs old 1.88) and old-distill val are **not comparable** (OLD trains on them). Pilot val favours NEW the same way.
+  **Reading:** (1) **arithmetic improved for real** (13% vs 1%, both seeds), but NEW learned the *format* (equation + `Answer:`) and adds
+  without carrying ("47 + 38 = 65 / 63"); × and ÷ are still ~0. The legacy exam didn't move (different prompt format). (2) **Story forgetting is equal or
+  slightly better for NEW, so no story-mix follow-up** (user's rule). (3) **Chat quality is worse for NEW:** longer, playful replies degenerate at 33M
+  (greedy loops like "I'm so sorry, I didn't mean to get mad at you" ×6, similes that make no sense). OLD is short and bland but coherent. So ft_v1 at 33M is not
+  a drop-in replacement for `aura_chat_distill`. It's evidence for both the format test and the scaling plan below.
+
+### Scaling plan (PLANNED 2026-10-28, NOT RUN; needs user approval)
+**0. Arithmetic-format test first (before any size decision), ~1 GPU-h.** Programmatic data, no teacher: A = plain equation
+("47 + 38 = 85" + Answer line), B = scratchpad with the carries written digit by digit, right to left ("ones: 7 + 8 = 15, write 5 carry 1; tens: 4 + 3 + 1 = 8 → 85").
+Same problem count (~150k), same ranges, battery problems excluded. Fine-tune from `ab_new_s0` (and `smart_big_10ep` as a check),
+2 seeds per arm, ~10 min each, then the battery. **Decision rule:** if B reaches ≥50% on the +/− 2-3 digit cells while A stays ≤30%, the
+bottleneck at 33M was *format*: put scratchpad arithmetic into the distill/pretrain mix. If both stay low, it's capacity, and the sweep decides.
+**1. Clean pretraining corpus (commercial-safe; no GPT- or closed-model-generated text):**
+
+| source | licence | available | planned share of ~2.2B tokens |
+|---|---|---|---|
+| FineWeb-Edu (HuggingFaceFW/fineweb-edu) | ODC-By (attribution) | 1.3T | ~55% |
+| Cosmopedia v2 (in HuggingFaceTB/smollm-corpus): textbooks, stories, incl. young-children stories | ODC-By; text by Mixtral-8x7B (Apache-2.0) | ~28B | ~30% (replaces TinyStories) |
+| FineMath-4+ (HuggingFaceTB/finemath) | ODC-By | 34B (3+) | ~10% |
+| Our licence-clean distill data (Qwen2.5-7B, Apache-2.0) + programmatic arithmetic (scratchpad if test 0 wins) | Apache-2.0 / ours | 59M + unlimited | ~5% |
+
+Excluded or flagged: **Wikipedia (CC BY-SA 3.0 + GFDL, share-alike)**, OpenWebMath (no licence on its card), Project Gutenberg (PD in the US only, strip
+the PG trademark headers), Python-Edu (per-file code licences), TinyStories/TinyChat (GPT-generated; TinyChat is NC). Download ~6-8 GB of parquet shards,
+not whole datasets. Record every source + licence in the run config and a corpus card.
+**Tokenizer:** train a new SentencePiece BPE on a ~2 GB sample of the new corpus: **24k** vocab, byte fallback, digits split, same specials. The
+current 16k was trained on the TinyStories-style mix and fits web text poorly. 32k makes the embedding swamp the small sweep model (32k×384 =
+12.3M of a ~26M model); 24k is the compromise. The same tokenizer is used for every size, so the sweep is fair. ~30-60 min CPU.
+**2. Scaling sweep (seq_len 512, same corpus and token budget, 16k tokens/step = batch 32 × 512):** sizes (measured param counts, 24k vocab):
+S d384 L8 H6 = **23.5M**, M d512 L12 H8 = **50.2M**, L d768 L12 H12 = **103.7M**. Arms: heartbeat **on / off / control** (`live_control`), **3 seeds**
+each (the lessons from the heartbeat experiment: one compiled run is noise, and the control is needed to attribute the effect). Estimates scaled from `big`'s measured
+295k tok/s and 7.6 GiB, ±25%:
+
+| size | est. tok/s | est. peak VRAM | 200M tokens/run | 9 runs (3 arms × 3 seeds) |
+|---|---|---|---|---|
+| S 23.5M | ~400k | ~6 GiB | ~8 min | ~1.3 h |
+| M 50.2M | ~185k | ~11 GiB | ~18 min | ~2.7 h |
+| L 103.7M | ~90k | ~17-18 GiB | ~37 min | ~5.6 h |
+| **total** | | | | **~9.5 GPU-h** (two nights, or one long one) |
+
+Measure the real tok/s and VRAM with a 30-step probe per size before the sweep. 200M tokens under-trains L (Chinchilla is ~2B), so compare sizes at
+equal tokens and look at the curves, not just the end values.
+**3. Research question: does the heartbeat effect hold, grow or vanish with size?** Per size: on vs off vs control val loss on a clean held-out set,
+Welch t + exact Mann-Whitney per pair, and the gain (off − on) vs log(params). With 3 seeds per cell, effects below ~2-3× the seed sd won't resolve; report that
+honestly. The control arm separates "synchrony helps" from "any phase-coherence loss helps", which is what the 33M result couldn't tell apart.
+**4. Full pretrain of the winning size, then distill on top:** e.g. L ~104M on ~2.1B tokens (~20 tokens/param) at ~90k tok/s ≈ **6.5 h** (one night),
+through `launch_train.sh` with `latest.pt` crash recovery. Then the distill fine-tune: ft_v1 (34M tokens) at ~90k tok/s ≈ **7 min/epoch**, 2 seeds, plus
+`ab_eval` (~3 min/checkpoint), against the 33M results above. **Watch the repetition rate** (the 33M failure) and the battery.
+**Code changes needed first (~half a day, no GPU):** `--seq-len` in `train_overnight.py`/`finetune_chat.py` (256 is hard-coded in the dataset, config and
+`SEQ`), new size-table entries, a **uint16 memmap token loader** (the current loader keeps the whole token cache in RAM as int64: 2.2B tokens = 17.6 GB, which is
+too much for 24 GB WSL), a tokenizer-training script, a corpus download/convert script, and `--max-aura-tokens` 240 → ~480 for future distill data.
+**Timeline:** day 1: commit, arithmetic-format test (1 GPU-h), code changes + corpus download + tokenizer (CPU). Nights 1-2: sweep (~9.5 GPU-h).
+Night 3: full pretrain (~6.5 h). Day 4: distill fine-tune + evals (~1 h).

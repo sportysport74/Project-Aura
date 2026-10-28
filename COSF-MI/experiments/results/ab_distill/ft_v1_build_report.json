@@ -1,0 +1,858 @@
+{
+ "src": "data/distill_pilot/full/kept.jsonl",
+ "args": {
+  "src": "data/distill_pilot/full/kept.jsonl",
+  "out": "data/distill_pilot/ft_v1",
+  "simile_cap": 0.3,
+  "quip_cap": 0.01,
+  "arith_share": 0.25,
+  "val_per_category": 2000,
+  "seed": 0
+ },
+ "teacher": "Qwen/Qwen2.5-7B-Instruct",
+ "teacher_license": "Apache-2.0 (Copyright 2024 Alibaba Cloud)",
+ "steps": {
+  "simile": {
+   "explain": {
+    "before": 0.5665096088238929,
+    "after": 0.2999956621697827
+   },
+   "arith": {
+    "before": 0.4233715803406292,
+    "after": 0.29999680769558185
+   },
+   "chat": {
+    "before": 0.6416248048014148,
+    "after": 0.29998897504685607
+   },
+   "story": {
+    "before": 0.003915783338797217,
+    "after": 0.003915783338797217
+   },
+   "oasst2": {
+    "before": 0.44892048446550814,
+    "after": 0.3
+   },
+   "gsm8k": {
+    "before": 0.0603368498982047,
+    "after": 0.0603368498982047
+   }
+  },
+  "quips": {
+   "arith": {
+    "n_before": 187952,
+    "n_after": 92338,
+    "top20_lines_before": [
+     [
+      "sure thing",
+      0.09613092704520303
+     ],
+     [
+      "that's a lot of <thing>",
+      0.021117093726057717
+     ],
+     [
+      "wow that's a lot of <thing>",
+      0.013029922533412786
+     ],
+     [
+      "let's add those <thing> together",
+      0.010651655741891546
+     ],
+     [
+      "let's see how many each gets",
+      0.009427939048267643
+     ],
+     [
+      "let's see how many each friend gets",
+      0.008049927641099856
+     ],
+     [
+      "let's see how many are left",
+      0.007736017706648506
+     ],
+     [
+      "how many would you have left",
+      0.007485953860560143
+     ],
+     [
+      "<name> must have felt a bit lighter after giving away those <thing>",
+      0.007347620669107006
+     ],
+     [
+      "how many are left",
+      0.007342300161743424
+     ],
+     [
+      "let's do the math",
+      0.007193325955563122
+     ],
+     [
+      "let's see how many he has left",
+      0.007166723418745212
+     ],
+     [
+      "each friend gets a fair share",
+      0.007150761896654465
+     ],
+     [
+      "let's see how many she has left",
+      0.006879416021111773
+     ],
+     [
+      "that's a lot of <thing> isn't it",
+      0.005442879032944581
+     ],
+     [
+      "let's count them all together",
+      0.005208776708946965
+     ],
+     [
+      "let's count them together",
+      0.005160892142674726
+     ],
+     [
+      "let's see how many candies each friend gets",
+      0.004910828296586362
+     ],
+     [
+      "sure thing little buddy",
+      0.00473525155358815
+     ],
+     [
+      "let's see how many she has now",
+      0.004522431259044862
+     ]
+    ],
+    "top20_lines_cover_before": 0.2466906444198519,
+    "top20_lines_after": [
+     [
+      "let's see how many each friend gets",
+      0.009974225129415842
+     ],
+     [
+      "let's see how many she has left",
+      0.009822608243626676
+     ],
+     [
+      "let's see how many he has left",
+      0.009811778466070308
+     ],
+     [
+      "let's see how many each gets",
+      0.009800948688513937
+     ],
+     [
+      "sure thing",
+      0.008967055816673525
+     ],
+     [
+      "let's see how many are left",
+      0.007970716281487579
+     ],
+     [
+      "let's do the math",
+      0.007894907838592995
+     ],
+     [
+      "how many are left",
+      0.007591674067014663
+     ],
+     [
+      "how many would you have left",
+      0.006898568303407048
+     ],
+     [
+      "let's add those <thing> together",
+      0.0061838029846866946
+     ],
+     [
+      "<name> must have felt a bit lighter after giving away those <thing>",
+      0.005988866988672053
+     ],
+     [
+      "let's count them all together",
+      0.005750611882431935
+     ],
+     [
+      "each friend gets a fair share",
+      0.005436548333297234
+     ],
+     [
+      "let's count them together",
+      0.004526847018562239
+     ],
+     [
+      "let's count them up",
+      0.0037687625896164092
+     ],
+     [
+      "let's find out",
+      0.003703783924278195
+     ],
+     [
+      "let's see how many she has now",
+      0.0033139119322489114
+     ],
+     [
+      "let's count them all up",
+      0.002967359050445104
+     ],
+     [
+      "let's see how many <thing> each friend gets",
+      0.002718274166648617
+     ],
+     [
+      "how many do you have left",
+      0.002599146613528558
+     ]
+    ],
+    "metaphors_before": [
+     [
+      "pile",
+      0.10692091597854772
+     ],
+     [
+      "candies",
+      0.10551630203456201
+     ],
+     [
+      "sure thing",
+      0.10444155954711841
+     ],
+     [
+      "that's a lot of",
+      0.10121201157742403
+     ],
+     [
+      "collection grew",
+      0.0701774921256491
+     ],
+     [
+      "mountain",
+      0.050470332850940665
+     ],
+     [
+      "tower / stacking",
+      0.04453264663318294
+     ],
+     [
+      "pizza / slices",
+      0.03517387418064186
+     ],
+     [
+      "jar",
+      0.03474823359155529
+     ],
+     [
+      "stash",
+      0.028150804460713375
+     ],
+     [
+      "snowball / hill",
+      0.0262301013024602
+     ],
+     [
+      "library",
+      0.02316016855367328
+     ],
+     [
+      "party",
+      0.019728441304162764
+     ],
+     [
+      "stars / sky",
+      0.01736081552736869
+     ],
+     [
+      "fair share",
+      0.016232867966289265
+     ],
+     [
+      "treasure",
+      0.015227292074572232
+     ],
+     [
+      "garden",
+      0.013546011747680258
+     ],
+     [
+      "felt lighter",
+      0.012620243466416957
+     ],
+     [
+      "puzzle",
+      0.00512364859112965
+     ]
+    ],
+    "metaphors_after": [
+     [
+      "pile",
+      0.008750460265546146
+     ],
+     [
+      "candies",
+      0.009681821135393879
+     ],
+     [
+      "sure thing",
+      0.009855097576295782
+     ],
+     [
+      "that's a lot of",
+      0.009920076241633997
+     ],
+     [
+      "collection grew",
+      0.009790118910957568
+     ],
+     [
+      "mountain",
+      0.009822608243626676
+     ],
+     [
+      "tower / stacking",
+      0.009865927353852152
+     ],
+     [
+      "pizza / slices",
+      0.009855097576295782
+     ],
+     [
+      "jar",
+      0.009822608243626676
+     ],
+     [
+      "stash",
+      0.009281119365808227
+     ],
+     [
+      "snowball / hill",
+      0.009486885139379238
+     ],
+     [
+      "library",
+      0.009800948688513937
+     ],
+     [
+      "party",
+      0.009985054906972211
+     ],
+     [
+      "stars / sky",
+      0.009811778466070308
+     ],
+     [
+      "fair share",
+      0.009811778466070308
+     ],
+     [
+      "treasure",
+      0.009800948688513937
+     ],
+     [
+      "garden",
+      0.009876757131408521
+     ],
+     [
+      "felt lighter",
+      0.009811778466070308
+     ],
+     [
+      "puzzle",
+      0.00687690874829431
+     ]
+    ],
+    "max_feature_after": 0.009985054906972211
+   },
+   "gsm8k": {
+    "n_before": 5403,
+    "n_after": 5214,
+    "top20_lines_before": [
+     [
+      "let's break it down",
+      0.007033129742735517
+     ],
+     [
+      "let's count them up",
+      0.005367388487877105
+     ],
+     [
+      "now let's add them all up",
+      0.004627059041273367
+     ],
+     [
+      "now let's add them up",
+      0.003886729594669628
+     ],
+     [
+      "let's think about this like a fun puzzle",
+      0.003886729594669628
+     ],
+     [
+      "let's break it down step by step",
+      0.003146400148065889
+     ],
+     [
+      "let's do the math",
+      0.00277623542476402
+     ],
+     [
+      "now let's add it all up",
+      0.002591153063113085
+     ],
+     [
+      "okay let's think about this like a fun puzzle",
+      0.002220988339811216
+     ],
+     [
+      "let's think about this step by step",
+      0.001665741254858412
+     ],
+     [
+      "that's a lot of <thing>",
+      0.001665741254858412
+     ],
+     [
+      "now let's add them all together",
+      0.001665741254858412
+     ],
+     [
+      "so we have",
+      0.0014806588932074773
+     ],
+     [
+      "let's calculate that",
+      0.0012955765315565426
+     ],
+     [
+      "wow that's a lot of <thing>",
+      0.001110494169905608
+     ],
+     [
+      "let's figure this out",
+      0.001110494169905608
+     ],
+     [
+      "okay let's think this through",
+      0.001110494169905608
+     ],
+     [
+      "sure thing",
+      0.001110494169905608
+     ],
+     [
+      "let's think this through step by step",
+      0.001110494169905608
+     ],
+     [
+      "okay let's figure this out",
+      0.0009254118082546734
+     ]
+    ],
+    "top20_lines_cover_before": 0.04978715528410142,
+    "top20_lines_after": [
+     [
+      "let's break it down",
+      0.005178365937859608
+     ],
+     [
+      "now let's add them all up",
+      0.004794783275795934
+     ],
+     [
+      "now let's add them up",
+      0.0038358266206367474
+     ],
+     [
+      "let's count them up",
+      0.00364403528960491
+     ],
+     [
+      "let's break it down step by step",
+      0.0028768699654775605
+     ],
+     [
+      "now let's add it all up",
+      0.0023014959723820483
+     ],
+     [
+      "let's think about this like a fun puzzle",
+      0.0023014959723820483
+     ],
+     [
+      "let's do the math",
+      0.002109704641350211
+     ],
+     [
+      "let's think about this step by step",
+      0.0017261219792865361
+     ],
+     [
+      "okay let's think about this like a fun puzzle",
+      0.0015343306482546988
+     ],
+     [
+      "so we have",
+      0.0015343306482546988
+     ],
+     [
+      "now let's add them all together",
+      0.0013425393172228615
+     ],
+     [
+      "let's calculate that",
+      0.0013425393172228615
+     ],
+     [
+      "okay let's think this through",
+      0.0011507479861910242
+     ],
+     [
+      "sure thing",
+      0.0011507479861910242
+     ],
+     [
+      "let's think this through step by step",
+      0.0011507479861910242
+     ],
+     [
+      "let's figure this out",
+      0.0009589566551591868
+     ],
+     [
+      "let's think about this like a treasure hunt",
+      0.0009589566551591868
+     ],
+     [
+      "oh no",
+      0.0007671653241273494
+     ],
+     [
+      "let's count it up",
+      0.0007671653241273494
+     ]
+    ],
+    "metaphors_before": [
+     [
+      "that's a lot of",
+      0.03757171941513974
+     ],
+     [
+      "puzzle",
+      0.0138811771238201
+     ],
+     [
+      "pizza / slices",
+      0.012955765315565427
+     ],
+     [
+      "candies",
+      0.008143623912641125
+     ],
+     [
+      "jar",
+      0.006292800296131778
+     ],
+     [
+      "party",
+      0.00518230612622617
+     ],
+     [
+      "treasure",
+      0.004441976679622432
+     ],
+     [
+      "pile",
+      0.004441976679622432
+     ],
+     [
+      "tower / stacking",
+      0.0040718119563205625
+     ],
+     [
+      "stars / sky",
+      0.0020359059781602813
+     ],
+     [
+      "mountain",
+      0.001665741254858412
+     ],
+     [
+      "sure thing",
+      0.001110494169905608
+     ],
+     [
+      "snowball / hill",
+      0.0007403294466037387
+     ],
+     [
+      "stash",
+      0.0007403294466037387
+     ],
+     [
+      "library",
+      0.0007403294466037387
+     ],
+     [
+      "garden",
+      0.000555247084952804
+     ],
+     [
+      "felt lighter",
+      0.00037016472330186933
+     ],
+     [
+      "fair share",
+      0.00018508236165093466
+     ]
+    ],
+    "metaphors_after": [
+     [
+      "that's a lot of",
+      0.009973149213655544
+     ],
+     [
+      "puzzle",
+      0.009781357882623706
+     ],
+     [
+      "pizza / slices",
+      0.009781357882623706
+     ],
+     [
+      "candies",
+      0.008438818565400843
+     ],
+     [
+      "jar",
+      0.006329113924050633
+     ],
+     [
+      "party",
+      0.004411200613732259
+     ],
+     [
+      "treasure",
+      0.004602991944764097
+     ],
+     [
+      "pile",
+      0.004602991944764097
+     ],
+     [
+      "tower / stacking",
+      0.00364403528960491
+     ],
+     [
+      "stars / sky",
+      0.0017261219792865361
+     ],
+     [
+      "mountain",
+      0.0015343306482546988
+     ],
+     [
+      "sure thing",
+      0.0011507479861910242
+     ],
+     [
+      "snowball / hill",
+      0.0007671653241273494
+     ],
+     [
+      "stash",
+      0.0005753739930955121
+     ],
+     [
+      "library",
+      0.0005753739930955121
+     ],
+     [
+      "garden",
+      0.0005753739930955121
+     ],
+     [
+      "felt lighter",
+      0.0003835826620636747
+     ],
+     [
+      "fair share",
+      0.00019179133103183735
+     ]
+    ],
+    "max_feature_after": 0.009973149213655544
+   }
+  },
+  "eval_excluded": 133,
+  "arith_cut": {
+   "target_tokens": 8900915.0,
+   "available_tokens": 7514270,
+   "cut": false,
+   "by_op": {
+    "*": {
+     "available": 9323,
+     "kept": 9323,
+     "tokens": 944064,
+     "share_full_run": 0.14906845116785422,
+     "short": null
+    },
+    "+": {
+     "available": 23821,
+     "kept": 23821,
+     "tokens": 1858271,
+     "share_full_run": 0.3292260016386383,
+     "short": null
+    },
+    "-": {
+     "available": 31194,
+     "kept": 31194,
+     "tokens": 2396262,
+     "share_full_run": 0.29992073643559325,
+     "short": null
+    },
+    "/": {
+     "available": 25867,
+     "kept": 25867,
+     "tokens": 2315673,
+     "share_full_run": 0.22178481075791426,
+     "short": null
+    }
+   }
+  }
+ },
+ "sizes": {
+  "explain": {
+   "start": [
+    186131,
+    19346191
+   ],
+   "simile_cap": [
+    115265,
+    11971101
+   ],
+   "train": [
+    113265,
+    11761697
+   ],
+   "val": [
+    2000,
+    209404
+   ]
+  },
+  "arith": {
+   "start": [
+    228166,
+    19187883
+   ],
+   "simile_cap": [
+    187952,
+    15742210
+   ],
+   "quip_thin": [
+    92338,
+    7688410
+   ],
+   "train": [
+    90205,
+    7514270
+   ],
+   "val": [
+    2000,
+    165205
+   ]
+  },
+  "chat": {
+   "start": [
+    106302,
+    10308550
+   ],
+   "simile_cap": [
+    54422,
+    5251368
+   ],
+   "train": [
+    52422,
+    5059415
+   ],
+   "val": [
+    2000,
+    191953
+   ]
+  },
+  "story": {
+   "start": [
+    54906,
+    9052145
+   ],
+   "simile_cap": [
+    54906,
+    9052145
+   ],
+   "train": [
+    52906,
+    8723763
+   ],
+   "val": [
+    2000,
+    328382
+   ]
+  },
+  "oasst2": {
+   "start": [
+    3798,
+    420230
+   ],
+   "simile_cap": [
+    2990,
+    331609
+   ],
+   "train": [
+    2790,
+    309397
+   ],
+   "val": [
+    200,
+    22212
+   ]
+  },
+  "gsm8k": {
+   "start": [
+    5403,
+    935161
+   ],
+   "simile_cap": [
+    5403,
+    935161
+   ],
+   "quip_thin": [
+    5214,
+    901481
+   ],
+   "train": [
+    4914,
+    848473
+   ],
+   "val": [
+    300,
+    53008
+   ]
+  }
+ },
+ "train_token_share": {
+  "explain": 0.3437382541989709,
+  "arith": 0.2196062397611247,
+  "chat": 0.14786254733208026,
+  "story": 0.2549539461580737,
+  "oasst2": 0.00904219728108954,
+  "gsm8k": 0.024796815268660927
+ },
+ "simile_rate_train": {
+  "explain": 0.29996027016289234,
+  "arith": 0.25607227980710606,
+  "chat": 0.30004578230513906,
+  "story": 0.0038558953615846973,
+  "oasst2": 0.2992831541218638,
+  "gsm8k": 0.05759055759055759
+ }
+}

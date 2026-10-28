@@ -1,0 +1,1 @@
+--checkpoint checkpoints/smart_big_10ep/best_model.pt --split-seed 0 --log-every 50 --distill data/cosf_distill_verified.jsonl --conversations 200000 --seed 0 --out checkpoints/ab_old_s0
