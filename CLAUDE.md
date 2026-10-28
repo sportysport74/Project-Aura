@@ -228,6 +228,31 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
   3. The playful voice makes stories longer: kept median 109 words (asked ≤100); too_long rejects median 175 words. **Proposed: "70-90 words"**.
   4. GSM8K: best-of-3 barely helped (73.3%): too_long 13 and LaTeX 11 (up from 5; the voice?). Proposed: "write × or *, never LaTeX".
   Tokens/sample in s3: story 174, gsm8k 169, oasst2 110, explain 104, chat 81, arith 45. Waiting for the user.
+- [x] **Fourth 2,000-sample check, `data/distill_pilot/sample4/`** (2026-10-27, `e1e3abb`; user-approved fixes). The follow-up question is
+  decided **in code per request**: 25% of chat/explain/oasst2 requests get "end with one short, natural follow-up question", the rest "do not
+  ask any question; end with a statement"; never for stories or maths. Playful is defined **without questions** (vivid comparisons, a fun or
+  surprising detail, a light joke, enthusiasm), with three tone examples in the persona (volcano/soup, owl parliament, yeast burps). "Don't make up
+  memory tricks or mnemonics unless they clearly make sense." Stories "70 to 90 words, with a clear ending, do not end with a question".
+  GSM8K "never use LaTeX: write × or *".
+
+  | category | keep s3 → s4 | Δ vs s3 | Δ vs s2 | dup | identity | ends in "?" | rejects (s4) |
+  |---|---|---|---|---|---|---|---|
+  | arith | 96.8% → 94.0% | −2.8 | −3.6 | 0.6% | 0% | 0.2% | wrong_answer 27, exact_dup 3 |
+  | chat | 100% → 99.7% | −0.3 | −0.3 | 0% | 0% | **27.0%** | truncated 1 |
+  | explain | 99.7% → 99.7% | 0 | +0.5 | 0% | 0% | **26.3%** | too_long 2 |
+  | gsm8k | 73.3% → 69.2% | −4.2 | −2.5 | 0% | 0% | 0% | too_long 21, wrong 11, latex 4, truncated 1 |
+  | oasst2 | 90.0% → 92.5% | +2.5 | −1.2 | 0% | 0% | **31.1%** | too_long 4, truncated 1, code 1 |
+  | story | 81.2% → **97.5%** | **+16.2** | −1.6 | 0.3% | 0% | 0% | too_long 6, no_ending 1, exact_dup 1 |
+
+  The in-code question decision works: replies end in "?" 96-99% of the time when assigned a question and 2-3% when told not to; ~25-31% overall.
+  The `no_ending` false positives are gone (17 → 1). Story median dropped (162 tokens/sample).
+  **Gate (literal, vs the last run = sample3): FAIL on one item only: story keep moved +16.2 points.** That's an *improvement*
+  (back to sample2's 99.1% level, −1.6 vs s2), which the "within 10 points" rule counts as a failure. As stated beforehand and per the rule,
+  **the full run was NOT started.** Every other condition passes: identity 0%, dup ≤0.6%, "?" ≤31.1%, other keep rates within 4.2.
+  New finding: **arith wrong_answer 9 → 27, but 23 of those 27 are correct answers missing the `Answer: N` line** (the playful line replaced it:
+  "…Each friend would get 54 candies! Yum yum!"). Only 4 are truly wrong (e.g. 71 × 565 = 40015). The filter is right to drop them (format).
+  A fix is optional (keep ≥94% anyway): "the playful line goes before the Answer line". Tokens/sample s4: story 162, gsm8k 171, oasst2 104,
+  explain 101, chat 85, arith 59. Full run, once allowed: `--target-tokens 50e6 --calibrate-from data/distill_pilot/sample4/stats.json`.
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
