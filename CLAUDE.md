@@ -70,12 +70,99 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
-**Resume point (2026-10-27, unattended work done for the user's evening review; GPU idle, nothing running):**
-Nothing merged or pushed since `main` = `01601df`. For review, stacked branches (each builds on the one before):
-`heartbeat-ablation` (`1bd0535`, 3-seed on/off result) → `heartbeat-control` (`28782ed`, `live_control` mode)
-→ `sync-cleanup` (`02a7e1a` code + this status update; checked out in the worktree `~/projects/aura-syncfix`,
-whose `.venv`/`data`/`cache`/tokenizer are symlinks into the main tree). Reviewing `sync-cleanup` covers all three.
-Results today: the control (below) says **synchronization itself is what helps**, and the remaining syncs are gone (+15% tok/s, below).
+**Resume point (2026-10-27 evening):** `main` = `3b7ca8e` (heartbeat-ablation, heartbeat-control and sync-cleanup merged and pushed;
+worktree `~/projects/aura-syncfix` removed). The control result is **corrected below**: control vs heartbeat isn't significant.
+**New goal: distillation.** The investigation is done (see "Distillation investigation" below); **the pilot plan waits for user approval.
+Don't start generation before that.**
+
+### Distillation investigation (2026-10-27; nothing changed, no generation run)
+**1. The old `aura_chat_distill` run.**
+- Teacher: Ollama `qwen2.5:32b` (Qwen2.5-32B-Instruct, Apache-2.0), temperature 0.8, `scripts/generate_cosf_distill.py`.
+- Method: **sequence-level** (synthetic text, no logits). The teacher writes whole samples from templated prompts. 60% are "numeric"
+  (question, short answer, plus a Python block with asserts run in a sandbox; kept only if every assert passes; the block isn't trained on)
+  and 40% are "dialogue" about AURA's own world (kept if there's no assistant filler). Every sample fits AURA's 240-token budget.
+- Data: **10,000 samples (6k numeric, 4k dialogue) = 597,586 AURA tokens, of which 287,936 are trained-on reply tokens.**
+  Rejected 2,848 (acceptance 78%), **mostly duplicates (2,100)**, so template diversity was the limit. 711 numeric failed the sandbox.
+- Training: `finetune_chat.py` from `checkpoints/smart_big_10ep/best_model.pt` (**only on Windows**:
+  `C:\Users\fatba\COSF-MI\COSF-MI\checkpoints`). TinyChat in the `You: … Aura: …` format with loss only on Aura's replies,
+  distill blended to 30% (each sample repeated up to 4×), and story replay "sleep" every 300 steps.
+- **What 1.686 is:** best checkpoint picked on (chat val + distill val)/2 = (1.8810 + 1.4910)/2. Both are reply-only losses.
+  Chat val = the first 2,252 TinyChat lines after `random.Random(1234).shuffle` (minus the last, possibly cut, line). Distill val = the first
+  500 of the 10k distill lines after `random.Random(seed).shuffle`, seed 0 (the default; not saved in the checkpoint).
+- **Reusable? Yes.** Re-scored on CPU with today's code: **distill val 1.4910 exactly** (seed 0 confirmed), chat val 1.8779 vs 1.8810
+  stored (0.003 apart, probably the original Windows-GPU numerics). Both files are unchanged since the run. **Rule for fair comparison: re-score old
+  checkpoints with the current eval code instead of comparing against logged numbers.** A new teacher's data gets its own held-out set,
+  but these two stay as fixed benchmarks.
+- That checkpoint has **33,727,690 unique params** (+241,866 vs today's `big`). Counting the tied 16,000×512 embedding twice gives exactly
+  **41.9M**, which settles the Known-state figure (an older config plus double-counting).
+
+**2. AURA's tokenizer** (`models/tokenizer_mix16k.model`): SentencePiece, **16,000 tokens**, byte fallback (256 byte pieces, so any
+Unicode round-trips), digits split one per token, newlines and indentation preserved, specials `<unk>`=0 `<s>`=1 `</s>`=2, no pad.
+**Not compatible with any Qwen teacher** (byte-level BPE, ~151k vocab), so token-level logit distillation is out. Use sequence-level, or
+later a cross-tokenizer method (e.g. Universal Logit Distillation), which is a project of its own. Measured: **1.10 AURA tokens per Qwen
+token** on teacher replies.
+
+**3. Teacher licences** (read from the HF model cards and LICENSE files): **Qwen2.5-7B-Instruct and Qwen2.5-14B-Instruct are Apache-2.0**
+(plain Apache 2.0 text, "Copyright 2024 Alibaba Cloud", no added terms, no NOTICE file). 32B-Instruct is also Apache-2.0.
+**Qwen2.5-3B-Instruct is `qwen-research`, so excluded.** Apache 2.0 puts no limit on using outputs to train other models. Attribution:
+there's no NOTICE file to carry, so the obligations attach to redistributing the *weights*. For our data and model, credit
+"Qwen2.5-7B-Instruct (Apache-2.0, © Alibaba Cloud)" in the run config and any dataset or model card (good practice, and our own rule).
+Size: 7B is 15.2 GB in bf16 and fits with room for the KV cache. 14B is 29.6 GB in bf16, too big with KV cache on 32 GB, so it needs FP8 or AWQ weights.
+
+**4. vLLM on the 5090: works.** Separate venv `~/venvs/vllm` (uv, Python 3.12): **vLLM 0.32.0 with its own torch 2.13.0+cu130 (sm_120 in
+the arch list)**, 7.9 GB. It doesn't touch `~/venvs/ml` or the project venv. **Needs `VLLM_USE_FLASHINFER_SAMPLER=0`**: without nvcc (no CUDA
+toolkit in WSL) FlashInfer's top-p/top-k sampler can't JIT-compile and engine warm-up fails, even though vLLM logs that FlashInfer kernels are disabled.
+Attention backend FLASH_ATTN (FA2), vLLM's torch.compile and CUDA graphs all work. Model load + warm-up 189 s. KV cache 10.9 GiB (205k tokens).
+Model in `~/.cache/huggingface/hub` (15 GB). Benchmark (Qwen2.5-7B-Instruct bf16, `max_model_len` 2048, temperature 0.7, top-p 0.9,
+max 256 new tokens; 200 prompts = 80 OASST2 + 60 GSM8K + 60 templates):
+
+| batch | sequences | time | generated tokens | throughput |
+|---|---|---|---|---|
+| 200 prompts × n=1 | 200 | 12.5 s | 20,497 | 1,642 tok/s (small batch, long-tail bound) |
+| 200 prompts × n=4 | 800 | 11.5 s | 81,613 | **7,119 tok/s** (69.8 samples/s) |
+
+Replies average ~100 Qwen tokens = ~110 AURA tokens. Prompt + reply averages **150 AURA tokens**, and 90-100% fit AURA's 256 window.
+**Teacher GSM8K accuracy 218/240 = 91%**, and 58/60 questions have at least 1 correct of 4 samples, so gold-answer filtering is cheap and strong.
+Quality issue found: a single system prompt with a maths rule ("end with Answer: N") leaked "Answer:" into non-maths replies, so use a
+per-category system prompt. Scripts and outputs: scratchpad `scripts/vllm_bench.py`, `vllm_out_*.jsonl` (not in the repo).
+
+**Licence problem in AURA's *existing* data (decision needed):** `data/tinychat` is **TinyChat (starhopp3r), CC-BY-NC-4.0, generated by
+GPT-4o mini**, and the pretraining "styled" data is TinyStories-based (**GPT-3.5/4 generated, CDLA-Sharing-1.0**). Neither is a
+"teacher" in our distillation rule, but both are closed-model outputs, and TinyChat is non-commercial. That's fine for a hobby model and
+not fine for anything commercial. The new pilot data avoids both.
+
+**5. Proposed pilot plan (awaiting approval)**
+- *Teacher:* Qwen2.5-7B-Instruct bf16 via vLLM (`~/venvs/vllm`), temperature 0.7-0.8, per-category system prompts, max 256 new tokens,
+  and drop anything whose prompt + reply exceeds 240 AURA tokens. Record teacher + licence in every run config. A 14B-AWQ teacher is a later
+  quality A/B on a subset, not the pilot.
+- *Prompt sources (all licence-clean):*
+
+  | source | licence | share | notes |
+  |---|---|---|---|
+  | Programmatic arithmetic and word problems | ours | ~25% | exact answers, unlimited and diverse. Targets the 64+88=73 failure. Keep only if the teacher's `Answer: N` matches |
+  | Qwen-generated prompts ("Magpie": the model writes user prompts from a topic list) | Apache-2.0 (Qwen outputs) | ~45% | everyday questions, simple science, how-to, short chats |
+  | Story prompts (templated characters × settings × morals) | ours | ~15% | keeps the story skill; replaces GPT-made TinyStories-style data |
+  | GSM8K train, 7,473 questions × 4 samples, gold-filtered | MIT | ~8% | harder multi-step maths |
+  | OASST2 English root prompts, 4,617 (15-300 chars) × 2 | Apache-2.0 | ~3% | human-written prompts |
+
+  Excluded: TinyChat (CC-BY-NC, GPT-4o mini), UltraChat (ChatGPT), SmolTalk Magpie-Ultra and everyday-conversations
+  (Llama-3.1 outputs, whose licence requires "Llama" in derived model names), Dolly (CC-BY-SA share-alike), TinyStories (GPT).
+- *Size:* **50M AURA tokens** first (~330k samples at ~150 tokens). Generate once, dedupe (exact + near-duplicate), filter, and hold out 2k
+  samples per category as the new val set. Scale to 100M only if the 50M pilot beats the old checkpoint on the evals below.
+- *Training:* sequence-level SFT with `finetune_chat.py` (reply-only loss, story replay sleep) from the same base as before
+  (`smart_big_10ep`, which has to be copied from Windows first; or decide on a new base). A/B against the old `aura_chat_distill`.
+- *Evaluation beyond val loss* (all on fixed sets, re-scored for every checkpoint with the same code):
+  1. Frozen val sets: TinyChat chat val (2,252), old distill val (500), story val (512 styled; measures forgetting), new pilot val (by category).
+  2. **A fixed 40-prompt readable set** (10 chat, 10 explain-simply, 10 story, 10 maths). Greedy + 1 sampled reply per checkpoint, written
+     side by side into a markdown file to read.
+  3. **Arithmetic battery** (programmatic, held-out numbers): exact-match accuracy by operation (+ − ×) × digits (1-3). That's more informative at
+     33M than GSM8K. Also the existing 120-question `experiments/math_eval.py`.
+  4. Format and degeneration: % replies that end their turn (`You:`), % `Answer: N` where required, repetition (distinct-2/3), length.
+  5. Optional: Qwen-7B as judge on the 40-prompt set (relevance/grammar 1-5), labelled as a weak signal.
+- *Time estimate (GPU-exclusive, mostly unattended):* prompt generation and templates ~0.5 h; **teacher generation for 50M AURA tokens ≈
+  33M Qwen output tokens at ~7k tok/s ≈ 1.3 h, ~1.7 h with rejection and 4× sampling for maths**; dedupe/filter/tokenize ~15 min (CPU);
+  fine-tune ~1 h (`finetune_chat.py` is still eager fp32, ~70k tok/s; 50M tokens ≈ 12 min/epoch × 3 plus evals); evals ~20 min.
+  **Total ≈ 4-5 h** for the 50M pilot, ~7 h for 100M. Teacher generation dominates. Training on 50M tokens is cheap.
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
@@ -107,23 +194,27 @@ measured over 500-step runs only. Next steps, in order:
    (`heartbeat-control` branch): the identical loss (strength 0.1, drift gate, target 0.3) on R_ψ = |mean_j e^{i(θ_j+ψ_j)}| with
    fixed random offsets ψ (seed 271828, not saved). It's met by a random phase pattern, so true R stays ~0.
    Tiny-model check: optimizing only that loss gives R_ψ 0.997 with true R 0.017 (the heartbeat gives true R 0.997). `live` mode is bit-identical to `main`.
-   3 seeds, 1 epoch `big`, same config (`configs/val_compile_bf16.yaml --heartbeat live_control`):
+   1 epoch `big`, same config (`configs/val_compile_bf16.yaml --heartbeat live_control`). **Final: 6 control seeds, 4 ON, 3 OFF**
+   (seeds 4-6 control and seed 4 ON added 2026-10-27 evening on `main` `3b7ca8e`; faster code, same numerics):
 
-   | arm | seed 1234 | seed 2 | seed 3 | val mean ± sd | true R | tok/s |
-   |---|---|---|---|---|---|---|
-   | heartbeat ON | 3.1094 | 3.1213 | 3.1184 | **3.1164 ± 0.0062** | 0.30 | 219-260k |
-   | heartbeat OFF | 3.1530 | 3.1444 | 3.1451 | 3.1475 ± 0.0048 | 0.004 | 181-187k |
-   | **CONTROL** | 3.1336 | 3.1273 | 3.1791 | **3.1467 ± 0.0283** | 0.004-0.005 | 237-239k |
+   | arm | val per seed (1234, 2, 3, 4, 5, 6) | n | mean ± sd | median | true R |
+   |---|---|---|---|---|---|
+   | heartbeat ON | 3.1094, 3.1213, 3.1184, 3.1084 | 4 | **3.1144 ± 0.0064** | 3.1139 | 0.30 |
+   | CONTROL | 3.1336, 3.1273, 3.1791, 3.1145, 3.1038, 3.1165 | 6 | **3.1291 ± 0.0266** | 3.1219 | 0.004-0.005 |
+   | heartbeat OFF | 3.1530, 3.1444, 3.1451 | 3 | 3.1475 ± 0.0048 | 3.1451 | 0.004 |
 
-   Control − ON = **+0.030** (4.9× the ON sd). It's worse on every seed (+0.024, +0.006, +0.061), and the ranges don't overlap
-   (best control 3.1273 > worst ON 3.1213). Control vs OFF: −0.001 mean, so indistinguishable (paired −0.019, −0.017, +0.034).
-   **Conclusion: a heartbeat-shaped loss that doesn't target synchrony doesn't reproduce the gain; synchronization itself is what helps.**
-   Caveats: (1) the control's loss term was **1.65× larger** on average than the heartbeat's (logged `sync=` means 0.000028 vs
-   0.000017, sampled every 100 steps; it took longer to reach its target). More extra loss and less benefit only strengthens the conclusion.
-   (2) Control seed 3 is weak (3.1791): it fell behind by step 500-1000 (6.94 vs 6.88 at 500) and stayed ~0.05 back. It has no instability
-   (gnorm median 0.45, 1% clipped, only the two known hard-batch jumps). Without it, control is still worse than every ON run.
-   (3) The control still constrains each token's phases to a coherent (random) pattern, so this shows alignment matters, not that
-   every coherence-like loss fails. Runs: `runs/20261027-074042` (s1234), `-081106` (s2), `-084020` (s3).
+   - Control vs ON: +0.015, **Welch t = 1.30, df 5.8, p = 0.24** (one-sided 0.12); **Mann-Whitney U = 16/24, exact p = 0.48**.
+     Pooled ranking of ON + control (1 = best): ctrl5, on4, on1234, ctrl4, ctrl6, on3, on2, ctrl2, ctrl1234, ctrl3. The **best run of all is a control**.
+   - OFF vs ON: +0.033, Welch t = 7.81, df 5.0, **p = 0.0006**; Mann-Whitney 12/12, exact p = 0.057 (the floor for 3 vs 4).
+   - Control vs OFF: −0.018, Welch p = 0.16, Mann-Whitney p = 0.17.
+   **Conclusion (corrected 2026-10-27):** the heartbeat clearly beats no heartbeat. The control is **not distinguishable** from the heartbeat
+   (p = 0.24 / 0.48) and sits between ON and OFF with a large spread, so this experiment **can't say whether synchronization itself
+   helps or any phase-coherence loss of this shape does.** The earlier "synchronization itself is what helps" (3 control seeds) was overstated:
+   "4.9×" used only the ON arm's sd and ignored the control's own spread (0.028, driven by seed 3 at 3.179). To separate the two you'd
+   need many more seeds (the control's sd is ~4× the ON sd) or a longer horizon where the gap might grow.
+   Notes: the control's loss term averaged 1.65× the heartbeat's (logged `sync=`), and its seed 3 fell behind by step 500 with no
+   instability. The control still pushes each token's phases toward a coherent (random) pattern. Runs: control s1234/2/3
+   `runs/20261027-074042`, `-081106`, `-084020`; s4/5/6 `runs/20261027-171812`, `-181204`, `-183912`; ON s4 `runs/20261027-174718`.
    **Speed clue:** the control (strength 0.1) runs at full speed (~238k), so the slow heartbeat-OFF runs are specific to
    `--heartbeat-strength 0`. That supports the guess that strength 0.0 changes the compiled graph (still unverified).
 2. [x] **Validation done (2026-10-26): recommend merging.** 1 epoch of `big`, seed 1234:
@@ -248,9 +339,9 @@ Open:
   graphs) and fused AdamW (`fused=True`). Both need an A/B.
 - [x] Data loader pinned memory: done as part of the sync cleanup (the H2D copy no longer stalls). Workers aren't needed (loader idle ~0.5 ms/step).
 - [ ] Spend the freed memory: seq_len > 256 or a bigger model. Re-run the batch-size probe on `sdpa-bf16` first.
-- [ ] Param count mismatch, mostly explained: `lm_head` is **tied** to the token embedding (`cosf_oscillator.py`, "Tie embeddings"),
-  so `big` has 33,485,824 unique params. Counting the tied 16,000×512 matrix twice gives 41,677,824 (41.7M), close to the
-  41.9M in Known state. ~0.2M is still unexplained (an older config?). Check against a checkpoint, then fix Known state.
+- [x] Param count mismatch explained (2026-10-27): `lm_head` is **tied** to the token embedding, so today's `big` has 33,485,824
+  unique params. The `aura_chat_distill` checkpoint has 33,727,690 (an older config, +241,866), and counting its tied 16,000×512 matrix
+  twice gives exactly 41.9M, the Known-state figure. Known state should say "33.5M unique (41.9M counted the tied embedding twice)".
 
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
