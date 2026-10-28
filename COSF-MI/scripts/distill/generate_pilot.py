@@ -46,11 +46,15 @@ TEACHER = "Qwen/Qwen2.5-7B-Instruct"
 TEACHER_LICENSE = "Apache-2.0 (Copyright 2024 Alibaba Cloud)"
 
 PERSONA = ("You are Aura, a small, friendly AI who lives on a home computer and is still learning. "
+           "Aura is curious and playful: enthusiastic about ideas, with light, gentle humor, and you notice interesting "
+           "details. Sometimes you end with a short follow-up question, but in at most about one reply in four. "
+           "Humor never comes at the expense of being correct. "
            "Use short sentences and everyday words. No jargon: if you need a special word, explain it simply. "
            "Write plain text only: no LaTeX, no code, no markdown headings. "
            "You can't see a clock, the internet or the news, so never make up times, dates or current events. "
            "Never say who made you, and never mention any company, model or product name.")
-FINAL = "then finish with a last line 'Answer: <number>' with just the number."
+FINAL = ("then finish with a last line 'Answer: <number>' with just the number. Keep the working clean and correct, "
+         "with at most one short playful line.")
 SYSTEM = {
     "arith": f"{PERSONA} Solve the problem. Write the calculation as an equation (for example: 252 - 59 = 193), {FINAL}",
     "gsm8k": f"{PERSONA} Solve the problem in a few short steps, writing each calculation as a plain equation, {FINAL}",
@@ -68,10 +72,21 @@ TECH_PROMPT = re.compile(r"\b(code|coding|program|python|javascript|java|c\+\+|r
                          r"database|json|current time|today'?s date|what time is it|latest news|stock price|weather today)\b",
                          re.I)
 
-# Share of AURA tokens per category in a full run (GSM8K and OASST2 are capped by their pool sizes:
-# one kept reply per prompt, since several replies to one prompt are near-duplicates of each other).
+# Category mix. --sample uses these as shares of *requests* (so sample runs stay comparable); a full run uses
+# them as shares of *kept AURA tokens*, sized from a sample's measured tokens/sample and keep rate
+# (--calibrate-from). GSM8K and OASST2 are capped by their pool sizes (one kept reply per prompt); their
+# shortfall goes to the other categories.
 SHARES = {"arith": 0.25, "explain": 0.33, "chat": 0.16, "story": 0.16, "gsm8k": 0.06, "oasst2": 0.04}
-AVG_AURA_TOKENS = 150  # measured on the vLLM benchmark (prompt + reply)
+GSM8K_SAMPLES = 3  # replies per GSM8K question; the shortest correct one that fits is kept
+
+JUDGE_SYSTEM = "You check short children's stories. Reply with exactly one word."
+JUDGE_USER = ("Story:\n{story}\n\nDoes this story reach a clear ending, where the problem is solved or the story wraps "
+              "up? Or does it stop in the middle of the plot? Reply ENDED or UNFINISHED.")
+_TRAILING = re.compile(r"[\s\"'”’)\]*_~☀-➿\U0001F300-\U0001FAFF]+$")
+
+
+def ends_with_question(reply):
+    return _TRAILING.sub("", reply).endswith("?")
 
 IDENTITY = re.compile(r"\b(qwen|alibaba)\b|language model|\bas an ai\b", re.I)
 ANSWER = re.compile(r"Answer:\s*\$?\s*(-?[\d,]*\.?\d+)")
@@ -267,6 +282,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--sample", type=int, default=0, help="small run with ~N candidates in total; prints 20 random kept samples")
     p.add_argument("--target-tokens", type=float, default=50e6, help="full run: AURA tokens to keep (prompt + reply)")
+    p.add_argument("--calibrate-from", default=None,
+                   help="full run: a sample run's stats.json (tokens per kept sample and keep rate per category)")
     p.add_argument("--out", default=None, help="output folder (default data/distill_pilot/sample or .../full)")
     p.add_argument("--chunk", type=int, default=16000, help="requests per vLLM call (stats and the stop check run per chunk)")
     p.add_argument("--max-dup-rate", type=float, default=0.10)
@@ -285,21 +302,36 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     aura_len = AuraLength(ROOT / "models/tokenizer_mix16k.model")
 
-    # How many candidates per category
-    total = args.sample if args.sample else int(args.target_tokens / AVG_AURA_TOKENS * 1.25)  # +25% for rejects
+    # How many requests per category
     gsm = [json.loads(line) for line in open(ROOT / "data/distill_pilot/src_gsm8k.jsonl")]
     oas_all = [json.loads(line) for line in open(ROOT / "data/distill_pilot/src_oasst2.jsonl")]
     oas = [o for o in oas_all if not TECH_PROMPT.search(o["prompt"])]
     print(f"OASST2: {len(oas):,} of {len(oas_all):,} prompts kept after dropping code/tech/real-time ones", flush=True)
-    want = {c: max(1, round(total * s)) for c, s in SHARES.items()}
-    want["gsm8k"] = min(want["gsm8k"], len(gsm))
-    want["oasst2"] = min(want["oasst2"], len(oas))
+    pool = {"gsm8k": len(gsm), "oasst2": len(oas)}
+    if args.sample:
+        want = {c: min(max(1, round(args.sample * s)), pool.get(c, 10 ** 9)) for c, s in SHARES.items()}
+    else:
+        # Token shares -> requests, using a sample's tokens per kept sample and keep rate (+5% margin)
+        cal = json.load(open(args.calibrate_from))
+        per_tok = {c: cal["kept_aura_tokens"][c] / cal["kept_samples"][c] for c in SHARES}
+        keep = {c: cal["per_category"][c]["keep_rate"] for c in SHARES}
+        need = {c: args.target_tokens * s / (per_tok[c] * keep[c]) * 1.05 for c, s in SHARES.items()}
+        want = {c: min(round(v), pool.get(c, 10 ** 9)) for c, v in need.items()}
+        short = sum((need[c] - want[c]) * per_tok[c] * keep[c] for c in pool)  # tokens the capped pools can't give
+        free = [c for c in SHARES if c not in pool]
+        for c in free:
+            want[c] = round(want[c] + short * SHARES[c] / sum(SHARES[f] for f in free) / (per_tok[c] * keep[c]))
+        print(f"Calibrated from {args.calibrate_from}: tokens/sample "
+              + ", ".join(f"{c} {v:.0f}" for c, v in per_tok.items()) + "; keep "
+              + ", ".join(f"{c} {v:.0%}" for c, v in keep.items()), flush=True)
     rng.shuffle(gsm)
     rng.shuffle(oas)
 
     run_config = {
         "teacher": TEACHER, "teacher_license": TEACHER_LICENSE, "method": "sequence-level (text) distillation",
-        "system_prompts": SYSTEM, "prompt_writer": PROMPT_WRITER, "temperature": args.temperature, "top_p": args.top_p,
+        "system_prompts": SYSTEM, "prompt_writer": PROMPT_WRITER, "story_judge": [JUDGE_SYSTEM, JUDGE_USER],
+        "gsm8k_samples_per_question": GSM8K_SAMPLES, "calibrated_from": args.calibrate_from,
+        "temperature": args.temperature, "top_p": args.top_p,
         "max_new_tokens": args.max_new_tokens, "max_aura_tokens": args.max_aura_tokens, "seed": args.seed,
         "candidates_per_category": want, "max_dup_rate": args.max_dup_rate,
         "prompt_licences": {"arith": "ours", "story": "ours", "explain": "Qwen output (Apache-2.0)",
@@ -338,54 +370,89 @@ def main():
                 + [dict(o, category="oasst2") for o in oas[:want["oasst2"]]])
     rng.shuffle(requests)
 
+    def check(r, reply, finish):
+        """First failing filter (None if it passes) and the AURA token count."""
+        c = r["category"]
+        if finish != "stop":
+            return "truncated", 0
+        if IDENTITY.search(reply):
+            return "identity", 0
+        if "INST]" in reply or "INST]" in r["prompt"]:
+            return "format", 0
+        if LATEX.search(reply):
+            return "latex", 0
+        if CODE.search(reply):
+            return "code", 0
+        if c in MATH:
+            m = ANSWER.findall(reply)
+            try:
+                ok = bool(m) and float(m[-1].replace(",", "").rstrip(".")) == float(r["gold"])
+            except ValueError:
+                ok = False
+            if not ok:
+                return "wrong_answer", 0
+        elif "Answer:" in reply:
+            return "answer_leak", 0
+        n_tok = aura_len(r["prompt"], reply)
+        return ("too_long", n_tok) if n_tok > args.max_aura_tokens else (None, n_tok)
+
     nd = NearDup(seed=args.seed)
     stats = defaultdict(Counter)
     kept_n = Counter()
     kept_tokens = Counter()
     sp2 = SamplingParams(temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_new_tokens, seed=args.seed)
+    sp2_gsm = SamplingParams(temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_new_tokens,
+                             n=GSM8K_SAMPLES, seed=args.seed)
+    sp_judge = SamplingParams(temperature=0.0, max_tokens=4)
     stopped = None
     with open(out / "kept.jsonl", "w") as fk, open(out / "rejected.jsonl", "w") as fr:
+        def reject(r, reason, reply):
+            stats[r["category"]][reason] += 1
+            fr.write(json.dumps({"category": r["category"], "reason": reason, "prompt": r["prompt"], "reply": reply}) + "\n")
+
         for i in range(0, len(requests), args.chunk):
             part = requests[i:i + args.chunk]
             convs = [[{"role": "system", "content": SYSTEM[r["category"]]}, {"role": "user", "content": r["prompt"]}]
                      for r in part]
-            for r, o in zip(part, llm.chat(convs, sp2, use_tqdm=False)):
-                c, out0 = r["category"], o.outputs[0]
-                reply = out0.text.strip()
-                stats[c]["generated"] += 1
-                reason = None
-                if out0.finish_reason != "stop":
-                    reason = "truncated"
-                elif IDENTITY.search(reply):
-                    reason = "identity"
-                elif "INST]" in reply or "INST]" in r["prompt"]:
-                    reason = "format"
-                elif LATEX.search(reply):
-                    reason = "latex"
-                elif CODE.search(reply):
-                    reason = "code"
-                elif c in MATH:
-                    m = ANSWER.findall(reply)
-                    try:
-                        ok = bool(m) and float(m[-1].replace(",", "").rstrip(".")) == float(r["gold"])
-                    except ValueError:
-                        ok = False
-                    reason = None if ok else "wrong_answer"
-                elif "Answer:" in reply:
-                    reason = "answer_leak"
-                if reason is None:
-                    n_tok = aura_len(r["prompt"], reply)
-                    if n_tok > args.max_aura_tokens:
-                        reason = "too_long"
-                if reason is None:
-                    stats[c]["dup_checked"] += 1
-                    reason = nd.check_and_add(c, reply)
-                if reason:
-                    stats[c][reason] += 1
-                    fr.write(json.dumps({"category": c, "reason": reason, "prompt": r["prompt"], "reply": reply}) + "\n")
+            sps = [sp2_gsm if r["category"] == "gsm8k" else sp2 for r in part]
+            # Phase 1: filters on every output; GSM8K keeps the shortest of its passing replies
+            passed = []
+            for r, o in zip(part, llm.chat(convs, sps, use_tqdm=False)):
+                stats[r["category"]]["generated"] += 1
+                stats[r["category"]]["replies_generated"] += len(o.outputs)
+                ok, reasons = [], []
+                for out_i in o.outputs:
+                    reply = out_i.text.strip()
+                    reason, n_tok = check(r, reply, out_i.finish_reason)
+                    (reasons.append((reason, reply)) if reason else ok.append((n_tok, reply)))
+                if ok:
+                    n_tok, reply = min(ok)
+                    passed.append((r, reply, n_tok))
+                else:
+                    reject(r, *Counter(rs for rs, _ in reasons).most_common(1)[0][:1], reasons[0][1])
+            # Phase 2: the teacher judges whether each story reaches a clear ending
+            stories = [k for k, (r, _, _) in enumerate(passed) if r["category"] == "story"]
+            if stories:
+                jconvs = [[{"role": "system", "content": JUDGE_SYSTEM},
+                           {"role": "user", "content": JUDGE_USER.format(story=passed[k][1])}] for k in stories]
+                unfinished = {k for k, o in zip(stories, llm.chat(jconvs, sp_judge, use_tqdm=False))
+                              if "UNFINISHED" in o.outputs[0].text.upper()}
+            else:
+                unfinished = set()
+            # Phase 3: near-duplicate check, then keep
+            for k, (r, reply, n_tok) in enumerate(passed):
+                c = r["category"]
+                if k in unfinished:
+                    reject(r, "no_ending", reply)
+                    continue
+                stats[c]["dup_checked"] += 1
+                dup = nd.check_and_add(c, reply)
+                if dup:
+                    reject(r, dup, reply)
                     continue
                 kept_n[c] += 1
                 kept_tokens[c] += n_tok
+                stats[c]["kept_question"] += ends_with_question(reply)
                 fk.write(json.dumps({"category": c, "source": r["source"], "prompt_license": r["license"],
                                      "teacher": TEACHER, "teacher_license": TEACHER_LICENSE, "aura_tokens": n_tok,
                                      "prompt": r["prompt"], "reply": reply,
@@ -412,7 +479,8 @@ def main():
         summary["per_category"][c].update({
             "identity_reject_rate": round(s["identity"] / g, 4) if g else 0,
             "dup_rate": round((s["exact_dup"] + s["near_dup"]) / s["dup_checked"], 4) if s["dup_checked"] else 0,
-            "keep_rate": round(kept_n[c] / g, 4) if g else 0})
+            "keep_rate": round(kept_n[c] / g, 4) if g else 0,
+            "question_ending_rate": round(s["kept_question"] / kept_n[c], 4) if kept_n[c] else 0})
     allgen = sum(s["generated"] for s in stats.values())
     summary["identity_reject_rate_overall"] = round(sum(s["identity"] for s in stats.values()) / max(1, allgen), 4)
     (out / "stats.json").write_text(json.dumps(summary, indent=1))
