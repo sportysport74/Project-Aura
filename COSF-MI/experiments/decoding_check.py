@@ -29,7 +29,7 @@ METRICS = [("repeated_4gram", "replies with a repeated 4-gram", "{:.0%}"), ("loo
            ("turn_ended", "turn ended", "{:.0%}"), ("ends_with_question_convo", 'ends in "?" (chat/explain)', "{:.0%}")]
 
 
-def run(name, path, rprompts, out_dir):
+def run(name, path, rprompts, out_dir, bs=64):
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     model = ab.COSFOscillatorTransformer(ckpt["config"]).to("cuda")
     model.load_state_dict(ckpt["model_state_dict"])
@@ -39,7 +39,7 @@ def run(name, path, rprompts, out_dir):
     for cfg, kw in CONFIGS.items():
         rows, readable = [], []
         for s in SAMPLES:
-            out = ab.generate(model, ab.tok_global, prompts, greedy=False, temperature=0.7, seed=s, **kw)
+            out = ab.generate(model, ab.tok_global, prompts, greedy=False, temperature=0.7, seed=s, bs=bs, **kw)
             rows += [(k, r, e) for (k, _), (r, e) in zip(rprompts, out)]
             readable.append([r for r, _ in out[:40]])
         res["stats"][cfg] = ab.text_stats(rows)
@@ -80,6 +80,8 @@ def main():
     p.add_argument("--out", default="experiments/results/ab_distill/decoding")
     p.add_argument("--ab-dir", default="experiments/results/ab_distill")
     p.add_argument("--pilot", default="data/distill_pilot/ft_v1")
+    p.add_argument("--bs", type=int, default=16, help="generation batch; 64 thrashed GPU memory (full-context logits) "
+                   "and ended in CUDA_ERROR_UNKNOWN on 2026-10-28")
     args = p.parse_args()
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -89,7 +91,7 @@ def main():
     names = []
     for spec in args.ckpts:
         name, path = spec.split("=", 1)
-        run(name, ROOT / path, rprompts, out_dir)
+        run(name, ROOT / path, rprompts, out_dir, args.bs)
         names.append(name)
     report(out_dir, names, ROOT / args.ab_dir)
     print(f"wrote {out_dir / 'summary.md'} and {out_dir / 'readable.md'}")

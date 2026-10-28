@@ -571,3 +571,32 @@ through `launch_train.sh` with `latest.pt` crash recovery. Then the distill fine
 too much for 24 GB WSL), a tokenizer-training script, a corpus download/convert script, and `--max-aura-tokens` 240 → ~480 for future distill data.
 **Timeline:** day 1: commit, arithmetic-format test (1 GPU-h), code changes + corpus download + tokenizer (CPU). Nights 1-2: sweep (~9.5 GPU-h).
 Night 3: full pretrain (~6.5 h). Day 4: distill fine-tune + evals (~1 h).
+
+### Step 0 and scaling prep: progress (2026-10-28, user-approved)
+- [x] Clean corpus **`data/corpus_v1/tok24k`**: **2,122,809,844 train + 10,571,015 val tokens** (uint16, 4.2 GB; built in 3.4 min). FineWeb-Edu
+  1210M (57.0%), Cosmopedia v2 660M (31.1%), FineMath-4+ 220M (10.4%), ft_v1 *train* split 32.5M (1.5%: **ran out**, target 5%; the slot can be filled
+  with programmatic (scratchpad) arithmetic after step 0). Raw shards in `data/corpus_v1/raw/` (8.41 GB: FineWeb-Edu sample/10BT 000+001,
+  Cosmopedia v2 00000-00002, FineMath-4+ 00000-00001).
+- [x] Tokenizer **`models/tokenizer_clean24k`**: SentencePiece BPE 24k, byte fallback, digits split, "\n" one token, specials 0/1/2. 48 s, 2.5 GB RAM.
+  **4.55 chars/token vs 4.29** for the old 16k on FineWeb-Edu + Cosmopedia (~6% fewer tokens).
+- [x] Code: `cosf_mi/data/memmap_dataset.py`, `scripts/corpus/{build_corpus,train_tokenizer}.py`, `train_overnight.py --seq-len --corpus` and sizes
+  `s25/m50/l100` (`23a58d6`). **Pending:** `finetune_chat.py --seq-len` (waits until step 0 stops importing it).
+- [ ] Step 0 queue (`scripts/step0_queue.sh`, run `runs/20261028-064058`): 4 arith fine-tunes from `ab_new_s0` (plain/scratch × seeds 0,1) → `ab_eval`
+  → decoding check (`--bs 16`). Data: `data/arith_format/{plain,scratch}` (same 150k problems; ops + 71k, − 64k, ÷ 8k, × 7k; 63k 3-digit ×
+  scratchpads dropped as too long, so the battery's × 3-digit cell can't be learned in this test).
+- **CUDA driver error in the first step-0 queue (run `runs/20261028-062703`, crashed ~06:34:56):** `torch.AcceleratorError: CUDA error: unknown
+  error` / `CUDA_ERROR_UNKNOWN from cuMemcpyDtoHAsync_v2` in `ab_eval.generate` (decoding check, `new_s0`, top-p + repetition-penalty setup, batch 64).
+  - **Peak VRAM right before:** not continuously sampled (that queue had no logger). Spot readings: **32,035 MiB at ~06:29 and 32,028 MiB at ~06:33
+  of 32,607 MiB (98.2%)**, so the card was full for at least the ~5 min before the crash. At launch (06:27) it was 1,512 MiB. After the crash it was 589 MiB.
+  - **Did memory exceed 32 GB?** No. It hit the ceiling: the PyTorch allocator logged 2 failed allocations (06:27:45: 644 MB, 06:28:15: 889 MB,
+  both "free: 0, total: 34,162,016,256 B"), freed its cache and retried. "Failed with OOM" means the driver refused, not that it spilled to system RAM.
+  - **Other GPU processes:** none in WSL: no Ollama model loaded (`ollama ps` empty), no other training or vLLM job. Running alongside were
+  CPU-only jobs: the corpus download, the tokenizer sample/training (ended 06:34) and a CPU tokenization test. On Windows, ~22 desktop processes held
+  GPU contexts (dwm, Wallpaper Engine, Discord, VS Code, Steam webhelper, Docker Desktop UI…) but no game. Windows reports their VRAM as N/A,
+  so their share can't be measured. No `nvlddmkm`/display-reset event in the Windows System log for the 30 min around it.
+  - **Cause: likely, not proven,** memory exhaustion/fragmentation in `generate` (full-context fp32 logits, 64 × 256 × 16k ≈ 1 GB per step, a new
+  size every step), ending in a driver fault. Puzzle: the same code at batch 64 ran the A/B eval earlier with 0 allocator warnings. GPU healthy afterwards.
+  - **Mitigation:** the decoding check now runs last, at batch 16, with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (also on the arith eval). A
+  2-second VRAM/util/temp/power sampler now logs to `runs/20261028-064058/vram.csv`.
+  - **Rule (user, 2026-10-28): if a CUDA driver error recurs, stop the queue and tell the user; don't retry.** (The queue already stops on any
+  error via `set -e`; no automatic relaunch.)
