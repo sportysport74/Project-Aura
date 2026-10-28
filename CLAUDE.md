@@ -256,12 +256,20 @@ chat data without TinyChat/TinyStories (e.g. open-weights-teacher data like the 
 - [x] **Gate fixed (2026-10-27, user decision):** the story +16.2 was a recovery, not a failure. `scripts/distill/gate.py <run stats> --ref <last
   accepted stats>` now fails only on keep-rate **drops** > 10 points (plus identity > 0, dup ≥ 10%, "?"-endings ≥ 35%). Checked:
   s4 vs s3 PASS, s4 vs s2 PASS, s3 vs s2 FAIL (questions, story −17.8). Use it for every future sample run.
-- [ ] **Full run IN PROGRESS** (started 2026-10-27 ~20:55, user-approved, unattended; `c1e1aa8`): detached (nohup/setsid, pid in
-  `data/distill_pilot/full_run.pid`), log `data/distill_pilot/full_run.log`, output `data/distill_pilot/full/` (`kept.jsonl`,
-  `rejected.jsonl`, `stats.json`, `run_config.json`). Calibrated from sample4: **619,092 requests** (arith 255,706, explain 187,208, chat
-  106,854, story 57,830, gsm8k 7,473 ×3 replies, oasst2 4,021) → expected ≈**52.6M kept AURA tokens** (target 50M + 5% margin).
-  The generator stops by itself if any category's near-dup rate goes ≥10%. Estimate ~2-3 h. **Don't start the fine-tune until the user has
-  read sample4** (`data/distill_pilot/sample4/review_20.md`).
+- [ ] **Full run attempt 1: STOPPED by the near-dup guard** (2026-10-27, `c1e1aa8`; log `data/distill_pilot/full_run.log`, partial output
+  `data/distill_pilot/full/`: 13,662 samples / 1.17M AURA tokens, **not to be used**). Planned: 619,092 requests (arith 255,706, explain 187,208,
+  chat 106,854, story 57,830, gsm8k 7,473 ×3, oasst2 4,021) → ≈52.6M tokens. It stopped after the first 16k-request chunk (19.4 min incl.
+  stage 1): **arith dup rate 11.0%** (≥10%). The process exited cleanly and the GPU is idle. Two problems in *my prompt generation*, found at scale only:
+  1. **Arith duplicates are repeated problems:** 1,202 of 1,219 dup rejects are *exact* duplicates (17 near). `arith_prompt` draws
+     (op, a, b) with replacement from a small space (e.g. division: divisor 2-12 × quotient 2-99 ≈ 1,078 problems), so "240 ÷ 8" appeared 4× in 12k.
+     Also arith wrong_answer 900/12,031 (7.5%), mostly the sample4 format issue (the playful line displaces `Answer:`).
+     Fix: each (op, a, b) at most once, wider ranges (divisor up to 99, larger quotients, some 4-digit +/−), and "the Answer line comes last;
+     any playful line goes before it".
+  2. **Stage-1 prompt pools collapsed:** explain **5,532 unique of 215,299** written prompts (2.6%), chat **7,475 of 122,892** (6%). The
+     teacher repeats itself with only ~140 topics × 6 askers × 5 styles, so the run shrank to 338,037 requests before starting. Fix: a stage 0
+     where the teacher expands each topic into ~20 subtopics (~2,800); more askers/styles plus a random "angle" per request; near-dup dedupe of prompts;
+     and a **unique-prompt yield gate (≥80%) measured in the sample run** before any full run (the 2,000-sample checks were too small to show this).
+  Waiting for the user's approval of these fixes. **Don't start the fine-tune until the user has read sample4.**
 
 Earlier resume point (2026-10-26): branch `sdpa-bf16` (since merged) had SDPA + bf16 + torch.compile as defaults in `train_overnight.py`,
 measured over 500-step runs only. Next steps, in order:
