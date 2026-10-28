@@ -121,12 +121,13 @@ def load_distill(path, share, n_chat_train, max_repeats, seed):
 
 
 @torch.no_grad()
-def val_loss(model, x, y, device, bs=32):
+def val_loss(model, x, y, device, bs=32, amp_dtype=None):
     model.eval()
     total, n = 0.0, 0
     for i in range(0, len(x), bs):
         xb, yb = x[i:i + bs].to(device), y[i:i + bs].to(device)
-        _, loss = model(xb, yb, return_coherence_loss=False)
+        with torch.autocast(xb.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+            _, loss = model(xb, yb, return_coherence_loss=False)
         k = (yb != IGNORE).sum().item()
         total += loss.item() * k
         n += k
@@ -152,7 +153,18 @@ def main():
     p.add_argument("--memory", type=int, default=2000, help="story batches kept in replay memory")
     p.add_argument("--eval-every", type=int, default=250)
     p.add_argument("--out", default="checkpoints/aura_chat")
-    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--seed", type=int, default=0, help="training seed: data order, dropout, replay sampling")
+    p.add_argument("--split-seed", type=int, default=0,
+                   help="seed for the distill train/val split, kept apart from --seed so the val set is the same for every "
+                        "training seed (0 = the split aura_chat_distill used)")
+    p.add_argument("--precision", default="bf16", choices=["fp32", "bf16"],
+                   help="bf16 autocast for attention and lm_head; oscillators and losses stay fp32 (as in train_overnight.py)")
+    p.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True,
+                   help="torch.compile the model in place (checkpoint keys unchanged); --no-compile for eager")
+    p.add_argument("--max-steps", type=int, default=0,
+                   help="stop after this many steps, keeping the full-run LR schedule (0 = run all; for A/B checks)")
+    p.add_argument("--log-every", type=int, default=0,
+                   help='print a plain "step=N loss=X sync=Y coh=Z tok/s=T gnorm=G" line every N steps (0 = off)')
     args = p.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     random.seed(args.seed)
@@ -162,6 +174,10 @@ def main():
     model = COSFOscillatorTransformer(ckpt["config"]).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     print(f"Base model: {args.checkpoint} (story val loss {ckpt['val_loss']:.4f})")
+    amp = torch.bfloat16 if args.precision == "bf16" else None
+    if args.compile:
+        model.compile()  # in place: state_dict keys stay free of the _orig_mod. prefix
+    print(f"Precision: {args.precision}, compile: {args.compile}, seed: {args.seed}")
 
     # the base model's vocab says which tokenizer/pretraining data it came from
     mix = ckpt["config"].vocab_size == 16000
@@ -176,7 +192,7 @@ def main():
     dval_x = None
     if args.distill:
         d_train, d_val, keep, repeats = load_distill(args.distill, args.distill_share, len(chat_train),
-                                                     args.distill_max_repeats, args.seed)
+                                                     args.distill_max_repeats, args.split_seed)
         chat_train = chat_train[:keep]
         share = len(d_train) / (len(d_train) + len(chat_train))
         print(f"  distill: {len(d_train) // repeats:,} samples x{repeats} + {len(chat_train):,} TinyChat "
@@ -215,45 +231,58 @@ def main():
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda s: min(1.0, (s + 1) / args.warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / steps))))
 
-    story_before = val_loss(model, story_vx, story_vy, device)
-    chat_before = val_loss(model, val_x, val_y, device)
-    distill_before = val_loss(model, dval_x, dval_y, device) if dval_x is not None else None
+    story_before = val_loss(model, story_vx, story_vy, device, amp_dtype=amp)
+    chat_before = val_loss(model, val_x, val_y, device, amp_dtype=amp)
+    distill_before = val_loss(model, dval_x, dval_y, device, amp_dtype=amp) if dval_x is not None else None
     print(f"Before: chat val {chat_before:.4f}  story val {story_before:.4f}"
           + (f"  distill val {distill_before:.4f}" if dval_x is not None else ""))
-    print(f"Training {steps:,} steps (batch {args.batch_size}, lr {args.lr}, "
+    last = min(steps, args.max_steps) if args.max_steps else steps  # the LR schedule still spans all `steps`
+    print(f"Training {last:,} of {steps:,} steps (batch {args.batch_size}, lr {args.lr}, "
           f"replay {'every ' + str(args.sleep_every) if args.sleep_every else 'off'})")
 
     out = ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
     best = float("inf")
     t0 = time.time()
+    window_start, window_tokens = time.time(), 0
     order = torch.randperm(len(train_x))
     model.train()
-    for step in range(1, steps + 1):
+    for step in range(1, last + 1):
         i = ((step - 1) * args.batch_size) % len(train_x)
         idx = order[i:i + args.batch_size]
         x, y = train_x[idx].to(device), train_y[idx].to(device)
-        _, loss, sync, coh = model(x, y, return_coherence_loss=True)
+        with torch.autocast(x.device.type, dtype=amp or torch.float32, enabled=amp is not None):
+            _, loss, sync, coh = model(x, y, return_coherence_loss=True)
         (loss + sync).backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # pre-clip norm, logged below
         optimizer.step()
         model.apply_julia_correction()
         scheduler.step()
         optimizer.zero_grad()
 
-        if args.sleep_every and step % args.sleep_every == 0 and step < steps:
-            dream = replay_sleep(model, optimizer, memory, args.replay, device)
+        if args.log_every:
+            window_tokens += x.numel()
+            if step % args.log_every == 0:
+                torch.cuda.synchronize() if x.is_cuda else None
+                dt = time.time() - window_start
+                print(f"step={step} loss={loss.item():.4f} sync={float(sync):.5f} coh={float(coh):.3f} "
+                      f"lr={scheduler.get_last_lr()[0]:.2e} step_ms={dt / args.log_every * 1000:.1f} "
+                      f"tok/s={window_tokens / dt:.0f} gnorm={float(grad_norm):.4f}", flush=True)
+                window_start, window_tokens = time.time(), 0
+
+        if args.sleep_every and step % args.sleep_every == 0 and step < last:
+            dream = replay_sleep(model, optimizer, memory, args.replay, device, amp_dtype=amp)
             print(f"  sleep @ {step}: replayed {args.replay} story batches (dream loss {dream:.3f})", flush=True)
 
-        if step % args.eval_every == 0 or step == steps:
-            chat = val_loss(model, val_x, val_y, device)
-            story = val_loss(model, story_vx, story_vy, device)
-            distill = val_loss(model, dval_x, dval_y, device) if dval_x is not None else None
+        if step % args.eval_every == 0 or step == last:
+            chat = val_loss(model, val_x, val_y, device, amp_dtype=amp)
+            story = val_loss(model, story_vx, story_vy, device, amp_dtype=amp)
+            distill = val_loss(model, dval_x, dval_y, device, amp_dtype=amp) if dval_x is not None else None
             mins = (time.time() - t0) / 60
             rate = step / max(1.0, time.time() - t0)
-            left = (steps - step) / rate / 60
+            left = (last - step) / rate / 60
             # tqdm-style line so fish.bat / tank.bat can follow the fine-tune
-            print(f"Epoch 1/1: {100 * step // steps}%|| {step}/{steps} [{mins:.0f}m<{left:.0f}m, "
+            print(f"Epoch 1/1: {100 * step // last}%|| {step}/{last} [{mins:.0f}m<{left:.0f}m, "
                   f"{rate:.2f}it/s, loss={loss.item():.4f}]", flush=True)
             print(f"step {step}: chat val {chat:.4f}  story val {story:.4f} "
                   f"(story change {story - story_before:+.4f})  liveR {coh:.3f}  {mins:.1f} min"

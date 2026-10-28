@@ -57,12 +57,13 @@ class ReplayMemory:
 
 
 def replay_sleep(model, optimizer, memory: ReplayMemory, n_batches: int = 50,
-                 device: str = "cuda", scheduler=None, clip: float = 1.0) -> float:
+                 device: str = "cuda", scheduler=None, clip: float = 1.0, amp_dtype=None) -> float:
     """
     Train on n_batches stored batches (the "dream"). Returns their mean loss.
 
     The scheduler is stepped too if given, so replay steps count toward the
     training budget the same way they did in the forgetting test.
+    amp_dtype: autocast dtype for the forward pass (e.g. torch.bfloat16), matching the main loop.
     """
     if not len(memory):
         return float("nan")
@@ -70,7 +71,9 @@ def replay_sleep(model, optimizer, memory: ReplayMemory, n_batches: int = 50,
     total = 0.0
     batches = memory.sample(n_batches)
     for x, y in batches:
-        out = model(x.to(device), y.to(device), return_coherence_loss=True)
+        x, y = x.to(device), y.to(device)
+        with torch.autocast(x.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+            out = model(x, y, return_coherence_loss=True)
         loss = out[1] + out[2]
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
