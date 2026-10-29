@@ -47,6 +47,11 @@ RCATS = ("chat", "explain", "story", "maths")
 
 # --------------------------------------------------------------------------- data
 
+def rel(path):
+    """Repo-relative path for anything written to a committed result file (no absolute paths in the public repo)."""
+    path = Path(path).resolve()
+    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else path.name
+
 def frozen_sets(tok, pilot_dir):
     """{name: (x, y)} for every frozen val set."""
     sets = {}
@@ -198,7 +203,7 @@ def evaluate(name, ckpt_path, tok, sets, rprompts, exam, out_dir):
     model = COSFOscillatorTransformer(ckpt["config"]).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
-    res = {"name": name, "checkpoint": str(ckpt_path),
+    res = {"name": name, "checkpoint": rel(ckpt_path),
            "run_config": json.loads((Path(ckpt_path).parent / "run_config.json").read_text())
            if (Path(ckpt_path).parent / "run_config.json").exists() else None}
     print(f"[{name}] val losses...", flush=True)
@@ -364,7 +369,7 @@ def base_val(path, sets, out_dir):
     model = COSFOscillatorTransformer(ckpt["config"]).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
-    res = {"checkpoint": str(path), "val": val_losses(model, sets)}
+    res = {"checkpoint": rel(path), "val": val_losses(model, sets)}
     (out_dir / "base_val.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
     del model
     torch.cuda.empty_cache()

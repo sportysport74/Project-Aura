@@ -1,6 +1,6 @@
 {
  "name": "arith_plain_s1",
- "checkpoint": "/home/fatback/projects/aura/COSF-MI/checkpoints/arith_plain_s1/best_model.pt",
+ "checkpoint": "checkpoints/arith_plain_s1/best_model.pt",
  "run_config": {
   "checkpoint": "checkpoints/ab_new_s0/best_model.pt",
   "data": "data/tinychat/tinychat_80mb.txt",

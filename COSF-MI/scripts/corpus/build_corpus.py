@@ -6,7 +6,9 @@ Sources (downloaded parquet shards under data/corpus_v1/raw/, one folder each) a
   cosmopedia_v2  HuggingFaceTB/smollm-corpus cosmopedia-v2   ODC-By; text by Mixtral-8x7B-Instruct (Apache-2.0)         30%
   finemath4      HuggingFaceTB/finemath finemath-4plus        ODC-By                                                     10%
   aura_distill   data/distill_pilot/ft_v1/train.jsonl (TRAIN split only, never val): Qwen2.5-7B-Instruct
-                 (Apache-2.0) replies + programmatic arithmetic, written as "You: … Aura: …" transcripts                 5%
+                 (Apache-2.0) replies + programmatic arithmetic, written as "You: … Aura: …" transcripts              1.5%
+                 (all of it: tok24k asked for 5% and ran out at 1.5%)
+  aura_arith     data/arith_corpus_v1/train.jsonl: plain-format arithmetic (build_arith_plain.py), same transcripts    3.5%
 
 Subcommands:
   sample    a mixed plain-text sample (by the same shares) for tokenizer training -> data/corpus_v1/tok_sample.txt
@@ -16,7 +18,7 @@ Subcommands:
 
 Usage (from COSF-MI/):
   .venv/bin/python scripts/corpus/build_corpus.py sample --mb 1500
-  .venv/bin/python scripts/corpus/build_corpus.py tokenize --tokenizer models/tokenizer_clean24k.model --tokens 2.2e9 --name tok24k
+  .venv/bin/python scripts/corpus/build_corpus.py tokenize --tokenizer models/tokenizer_clean24k.model --tokens 2.2e9 --name tok24k_v2   (tok24k = before aura_arith)
 """
 import argparse
 import hashlib
@@ -40,9 +42,12 @@ SOURCES = {
                       "repo": "HuggingFaceTB/smollm-corpus cosmopedia-v2"},
     "finemath4": {"share": 0.10, "glob": "finemath4/**/*.parquet", "licence": "ODC-By 1.0 (collection; CommonCrawl web text)",
                   "repo": "HuggingFaceTB/finemath finemath-4plus"},
-    "aura_distill": {"share": 0.05, "jsonl": "data/distill_pilot/ft_v1/train.jsonl",
+    "aura_distill": {"share": 0.015, "jsonl": "data/distill_pilot/ft_v1/train.jsonl",
                      "licence": "Apache-2.0 teacher outputs (Qwen2.5-7B-Instruct) + programmatic (ours)",
                      "repo": "local: data/distill_pilot/ft_v1 train split"},
+    "aura_arith": {"share": 0.035, "jsonl": "data/arith_corpus_v1/train.jsonl",
+                   "licence": "ours (programmatic arithmetic, no teacher)",
+                   "repo": "local: scripts/distill/build_arith_plain.py --n 1830000 --seed 1 (plain format, 1-4 digits, + - × ÷)"},
 }
 _INST = re.compile(r"\[INST\]\s*(.*?)\s*\[/INST\]\s*(.*)", re.S)
 

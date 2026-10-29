@@ -458,6 +458,9 @@ Open:
   Today's base and chat data (TinyStories, TinyChat) already fail this, so the next pretrain must use a clean corpus.
 - Never commit checkpoints, data, logs, caches, `memory/jarvis/` or `.claude/settings.local.json` (see `.gitignore`).
   The repo is public: scan new files for secrets before pushing.
+- **Committed results use repo-relative paths** (decided 2026-10-28): no `/home/...` or `C:\Users\...` in anything under
+  `experiments/results/` or other committed output. Eval scripts write paths through `ab_eval.rel()`. Check before committing:
+  `git grep -n /home/ -- COSF-MI/experiments/results` must print nothing.
 - One GPU: don't run the 32b teacher and training at the same time.
 - **Compiled runs aren't bit-reproducible** (`--compile` is the default): the same seed and config diverge after ~100-200 steps.
   Eager runs with the same seed are bit-identical. Published or compared results must use `--no-compile`, or report
@@ -619,6 +622,36 @@ Night 3: full pretrain (~6.5 h). Day 4: distill fine-tune + evals (~1 h).
   OLD under every setting, and its replies are ~4× longer (59 vs 15 words), so per-word it's closer. **Side effect of rep 1.15:** NEW's "?"
   endings on chat/explain jump from 6% to 64%. The penalty (over prompt + reply) pushes away from "." after a few sentences, so it changes the
   reply's shape and isn't a free fix.
+- [x] **× / ÷ data-vs-capacity test** (2026-10-28, run `runs/20261028-164812`; `scripts/arith_md_queue.sh`, results
+  `experiments/results/arith_md/summary.md`). Data: `scripts/distill/build_arith_plain.py`, plain format, mix × 40 / ÷ 40 / + 10 / − 10%, each
+  operand 1-4 digits (÷ = (a × b) ÷ b: quotient and divisor 1-4 digits). Same steps in both arms: **25k unique × 4 epochs vs 100k × 1 epoch**,
+  seeds 0/1, from `arith_plain_s0`. Eval: 15 problems per digit cell, **fit** (problems both arms trained on) vs **held** (never generated).
+  Rule decided beforehand: capacity if it can't fit its own training problems and 4× unique data doesn't help; data if held-out rises with 100k.
+  **Result: capacity (for plain-format, one-pass answers at 33M).**
+  - × with both operands ≥ 2 digits: fit 0-20%, held 0-7%, in every arm. It can't reproduce problems it saw 4×. 25k vs 100k: no difference.
+  - × 1 × n-digit: held 2x1 20-40%, 1x2 27-40%, 1x3 7-20%, 1x4 0%.
+  - **Times tables learned:** × 1x1 80-87%, battery × 1-digit 90-100% (was 0%). These are memorized facts (always trained).
+  - ÷: 1-digit quotient ~100% (any divisor, it's estimation); 2-digit quotient fit 13-47% / held 20-60%; ≥ 3-digit quotient ~0. Fit ≈ held, 25k ≈ 100k.
+  - Battery ALL 56% → 61-65%. Cost: with + − at only 20% of the mix, + 3-digit fell 98 → 85-95% and − 3-digit 90 → 72-80%.
+  - Open: **scratchpad × now that the facts are known.** Step 0's scratch × failures were single-digit fact errors, and the facts are now
+    learned, so scratch + facts could work where plain can't. Untested. The sweep's final models (`final_model.pt`) can also take the battery
+    per size (the corpus has the same "You: … Aura: …" arithmetic), which tests capacity vs size directly.
+  - Caveat: `arith_md_eval.py` and `ab_eval.py` score the same checkpoint differently (`arith_plain_s0`: battery 56% vs 51%, + 1-digit 100% vs 85%;
+    max_new 40 vs 120, different batch composition). Compare numbers only within one script's table. Whether padding/batch composition changes
+    greedy answers is unchecked and worth a look.
+- [x] **Corpus arithmetic slot** (2026-10-28): `data/arith_corpus_v1` = `build_arith_plain.py --n 1830000 --seed 1`: + 472k, − 424k, × 467k,
+  ÷ 467k, 1-4 digits; 199k are 1-digit facts (~11%, each fact repeated hundreds of times); non-facts unique; every multi-digit eval triple and every
+  `heldout()` triple excluded. **1-digit facts are NOT held out** (they're needed to teach the tables; the battery reserves 30 of the 64 × facts and 30
+  of the 45 one-digit − facts), so from now on the battery's 1-digit cells measure fact recall, not generalization. `--exclude-facts` restores the
+  strict rule. New corpus **`data/corpus_v1/tok24k_v2`**: 2,199,809,974 train + 10,955,119 val tokens. FineWeb-Edu 1210M (55.0%), Cosmopedia 660M (30.0%),
+  FineMath 220M (10.0%), aura_distill 32.5M (1.5%, all of it), **aura_arith 77.0M (3.5%)**. `tok24k` (without arithmetic) kept.
+- [ ] **Scaling sweep, launched unattended 2026-10-28 evening** (`scripts/sweep_queue.sh`, user-approved; results
+  `experiments/results/sweep/{results.tsv,summary.md}` via `experiments/sweep_report.py`). s25 / m50 / l100 × on / off / control × seeds 1-3 =
+  27 runs, 200M tokens each (12,207 steps, batch 32 × seq 512), lr 6e-4, warmup 500, **cosine to 0 at the budget** (new `--decay-steps`), val on the
+  whole val split, `--save-final` keeps `checkpoints/sweep/<size>_<arm>_s<seed>/final_model.pt`. Data order is fixed per epoch, so a seed fixes
+  the init and the arms are paired by seed. Probe (60 steps, seq 512): **s25 23.47M, 6.8 GiB, ~310k tok/s; m50 50.23M, 11.3 GiB, ~165k; l100
+  103.65M, 16.2 GiB, ~88k.** Heartbeat-off is not slower at these sizes. Estimate ≈ 11-12 h. Stops on the first failure (a CUDA error is
+  labelled) and never retries. Relaunching skips finished runs.
 - **CUDA driver error in the first step-0 queue (run `runs/20261028-062703`, crashed ~06:34:56):** `torch.AcceleratorError: CUDA error: unknown
   error` / `CUDA_ERROR_UNKNOWN from cuMemcpyDtoHAsync_v2` in `ab_eval.generate` (decoding check, `new_s0`, top-p + repetition-penalty setup, batch 64).
   - **Peak VRAM right before:** not continuously sampled (that queue had no logger). Spot readings: **32,035 MiB at ~06:29 and 32,028 MiB at ~06:33

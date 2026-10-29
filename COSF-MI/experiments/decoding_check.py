@@ -35,7 +35,7 @@ def run(name, path, rprompts, out_dir, bs=64):
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     prompts = [p for _, p in rprompts]
-    res = {"name": name, "checkpoint": str(path), "stats": {}, "readable": {}}
+    res = {"name": name, "checkpoint": ab.rel(path), "stats": {}, "readable": {}}
     for cfg, kw in CONFIGS.items():
         rows, readable = [], []
         for s in SAMPLES:

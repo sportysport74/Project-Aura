@@ -62,6 +62,7 @@ def train_with_gentle_sleep(
     log_every=0,
     amp_dtype=None,
     eval_batches=0,
+    save_final=False,
 ):
     """Train model with gentle sleep cycles.
 
@@ -148,9 +149,13 @@ def train_with_gentle_sleep(
             if max_steps and global_step >= max_steps:
                 peak = torch.cuda.max_memory_allocated() / 2**30 if inputs.is_cuda else 0.0
                 print(f"Reached --max-steps {max_steps}; stopping early (peak VRAM {peak:.2f} GiB)", flush=True)
+                val_loss = None
                 if eval_batches:
                     val_loss = evaluate(model, val_loader, device, amp_dtype, max_batches=eval_batches)
                     print(f"val_loss={val_loss:.4f} (first {eval_batches} val batches)", flush=True)
+                if save_final:
+                    torch.save({"config": model.config, "model_state_dict": model.state_dict(), "step": global_step,
+                                "val_loss": val_loss}, Path(checkpoint_dir) / "final_model.pt")
                 return
 
             # Progress bar and sleep check every 10 steps: reading the loss is a GPU sync
@@ -374,6 +379,11 @@ def main():
                         help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
     parser.add_argument('--eval-batches', type=int, default=0,
                         help='With --max-steps: report val loss on the first N val batches at the end')
+    parser.add_argument('--decay-steps', type=int, default=0,
+                        help='Cosine LR decay length in steps (0 = all epochs). Set it to --max-steps so a short run '
+                             'finishes its schedule (scaling sweep)')
+    parser.add_argument('--save-final', action='store_true',
+                        help='With --max-steps: save the weights to <checkpoint-dir>/final_model.pt at the stop')
     parser.add_argument('--seq-len', type=int, default=256, help='Context length (model positions and data windows)')
     parser.add_argument('--corpus', type=str, default=None,
                         help='Pre-tokenized corpus dir (train.bin/val.bin/meta.json, scripts/corpus/tokenize_corpus.py); '
@@ -554,7 +564,7 @@ def main():
         [{"params": other_params}, {"params": phase_params, "weight_decay": 0.0}],
         lr=args.lr,
     )
-    total_steps = len(train_loader) * args.epochs
+    total_steps = args.decay_steps or len(train_loader) * args.epochs
     if args.warmup:
         # Linear warmup, then the same cosine decay
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda s: min(1.0, (s + 1) / args.warmup) * 0.5 * (
@@ -633,6 +643,7 @@ def main():
         log_every=args.log_every,
         amp_dtype=torch.bfloat16 if args.precision == 'bf16' else None,
         eval_batches=args.eval_batches,
+        save_final=args.save_final,
     )
 
     print()

@@ -1,6 +1,6 @@
 {
  "name": "old_s0",
- "checkpoint": "/home/fatback/projects/aura/COSF-MI/checkpoints/ab_old_s0/best_model.pt",
+ "checkpoint": "checkpoints/ab_old_s0/best_model.pt",
  "stats": {
   "topk40": {
    "n": 800,

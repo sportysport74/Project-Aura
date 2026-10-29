@@ -1,6 +1,6 @@
 {
  "name": "ref_aura_chat_distill",
- "checkpoint": "/home/fatback/projects/aura/COSF-MI/checkpoints/aura_chat_distill/best_model.pt",
+ "checkpoint": "checkpoints/aura_chat_distill/best_model.pt",
  "stats": {
   "topk40": {
    "n": 800,
