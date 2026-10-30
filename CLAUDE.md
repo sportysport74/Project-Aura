@@ -72,10 +72,25 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**Resume point (2026-10-29 21:00):** scaling sweep **DONE, 27/27**. Results in `COSF-MI/experiments/results/sweep/{results.tsv,summary.md}`.
+Reading (user-corrected): **most of the gain is any phase-coherence loss, with synchrony possibly adding a small part.** At l100, off→control is
++0.091 and control→on +0.029 (paired p 0.029, n=3, thin); s25 +0.054/+0.006, m50 +0.068/+0.039. Next: the night queue
+`scripts/pretrain_queue.sh` = full l100 pretrain (heartbeat on, 2.2B tokens, `--no-sleep`, ~7 h) then seeds 4-6 of l100 on vs control
+(~4 h) to firm up the synchrony question. Stops on the first failure, no retries. The older resume point follows.
+
 **Resume point (2026-10-27 evening):** `main` = `3b7ca8e` (heartbeat-ablation, heartbeat-control and sync-cleanup merged and pushed;
 worktree `~/projects/aura-syncfix` removed). The control result is **corrected below**: control vs heartbeat isn't significant.
 **New goal: distillation.** The investigation is done (see "Distillation investigation" below); **the pilot plan waits for user approval.
 Don't start generation before that.**
+
+### Windows BSOD during the sweep (2026-10-29) ⏳
+- 01:49: bugcheck 0x133 DPC_WATCHDOG_VIOLATION (DPC_QUEUE_EXECUTION_TIMEOUT_EXCEEDED). Same as 10/26 06:49. `cdb !analyze -v` puts both in the
+  NVIDIA driver's DPC path (10/26: `nvlddmkm`; 10/29: `dxgmms2!VidSchiUnwaitMonitoredFences` called from `nvlddmkm`'s DPC). Driver 617.42
+  (32.0.16.1742, 2026-09-29). Wallpaper Engine (`wallpaper32`) was the active process in the 10/26 crash and is running now. Older dumps
+  (0x13A heap 5/26 and 6/10, 0x3B opera 9/2) look unrelated. WinDbg installed via winget; analyses in `%LOCALAPPDATA%\Temp\dumpan\` (outside the repo).
+- The sweep lost only `l100_control_s2`. Relaunched as run `20261029-042725` at 04:27, finished 07:12 with no new crash.
+- ⏳ Mitigation: quit Wallpaper Engine during training, clean-install the NVIDIA driver, and/or turn HAGS off. At 20:40 on 10/29 the driver was
+  still 617.42 with files from 10/9 and no reboot since the crash, so a reinstall wasn't visible yet.
 
 ### Distillation investigation (2026-10-27; nothing changed, no generation run)
 **1. The old `aura_chat_distill` run.**
