@@ -19,6 +19,15 @@ from typing import List, Optional, Union
 import json
 
 
+# The base model's vocab size says which tokenizer (and pretraining data) it came from. Paths are relative to COSF-MI/.
+TOKENIZER_BY_VOCAB = {16000: "models/tokenizer_mix16k.model", 24000: "models/tokenizer_clean24k.model"}
+
+
+def tokenizer_for_vocab(vocab_size: int) -> str:
+    """Tokenizer path for a model's vocab size (8k TinyStories tokenizer for anything else)."""
+    return TOKENIZER_BY_VOCAB.get(vocab_size, "models/tokenizer_8k.model")
+
+
 class CharTokenizer:
     """Simple character-level tokenizer."""
 

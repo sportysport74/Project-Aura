@@ -36,7 +36,8 @@ sys.path.insert(0, str(ROOT / "experiments"))
 import finetune_chat as ft  # noqa: E402
 import math_eval  # noqa: E402
 from arith_battery import battery  # noqa: E402
-from cosf_mi.data.tokenizer import BPETokenizer  # noqa: E402
+from cosf_mi.data.tokenizer import BPETokenizer, tokenizer_for_vocab  # noqa: E402
+from cosf_mi.data.memmap_dataset import load_corpus  # noqa: E402
 from cosf_mi.data.token_dataset_fast import create_datasets_fast  # noqa: E402
 from cosf_mi.models.cosf_oscillator import COSFOscillatorTransformer  # noqa: E402
 
@@ -52,8 +53,9 @@ def rel(path):
     path = Path(path).resolve()
     return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else path.name
 
-def frozen_sets(tok, pilot_dir):
-    """{name: (x, y)} for every frozen val set."""
+def frozen_sets(tok, pilot_dir, vocab=16000):
+    """{name: (x, y)} for every frozen val set. For a corpus-pretrained base (24k vocab) "story (forgetting)" is 512 windows
+    of its pretraining corpus's val split, the same draw finetune_chat.py measures."""
     sets = {}
     lines = Path(ROOT / "data/tinychat/tinychat_80mb.txt").read_text(encoding="utf-8").splitlines()[:-1]
     random.Random(1234).shuffle(lines)
@@ -61,10 +63,13 @@ def frozen_sets(tok, pilot_dir):
     sets["chat (TinyChat)"] = ft.build_chat_tensors(tok, lines[:n_val])
     _, d_val, _, _ = ft.load_distill(ROOT / "data/cosf_distill_verified.jsonl", 0.3, 1, 4, 0)
     sets["old distill"] = ft.build_chat_tensors(tok, d_val)
-    with contextlib.redirect_stdout(io.StringIO()):
-        _, story_val = create_datasets_fast(
-            train_path=str(ROOT / "data/mix/styled_train.txt"), val_path=str(ROOT / "data/mix/styled_val.txt"),
-            tokenizer=tok, seq_len=SEQ, cache_dir=str(ROOT / "cache/tokenized_styled"))
+    if vocab in ft.BASE_CORPUS:
+        _, story_val, _ = load_corpus(ROOT / ft.BASE_CORPUS[vocab], SEQ)
+    else:
+        with contextlib.redirect_stdout(io.StringIO()):
+            _, story_val = create_datasets_fast(
+                train_path=str(ROOT / "data/mix/styled_train.txt"), val_path=str(ROOT / "data/mix/styled_val.txt"),
+                tokenizer=tok, seq_len=SEQ, cache_dir=str(ROOT / "cache/tokenized_styled"))
     g = torch.Generator().manual_seed(1234)  # same draw as finetune_chat.py
     vidx = torch.randperm(len(story_val), generator=g)[:512]
     sv = [story_val[int(i)] for i in vidx]
@@ -220,13 +225,16 @@ def evaluate(name, ckpt_path, tok, sets, rprompts, exam, out_dir):
     rp = [p for _, p in rprompts]
     greedy = generate(model, tok, rp, greedy=True)
     sampled = generate(model, tok, rp, greedy=False, seed=1)
+    sampled_rep = generate(model, tok, rp, greedy=False, seed=1, top_k=0, top_p=0.9, rep_penalty=1.15, bs=16)
     res["rates"] = {"greedy": text_stats([(k, r, e) for (k, _), (r, e) in zip(rprompts, greedy)]),
-                    "sampled": text_stats([(k, r, e) for (k, _), (r, e) in zip(rprompts, sampled)])}
+                    "sampled": text_stats([(k, r, e) for (k, _), (r, e) in zip(rprompts, sampled)]),
+                    "sampled_rep": text_stats([(k, r, e) for (k, _), (r, e) in zip(rprompts, sampled_rep)])}
     nr = sum(len(READABLE[c]) for c in RCATS)  # the readable set comes first in rprompts
-    res["readable"] = [{"prompt": p, "greedy": g[0], "sampled": s[0]} for p, g, s in zip(rp[:nr], greedy[:nr], sampled[:nr])]
+    res["readable"] = [{"prompt": p, "greedy": g[0], "sampled": s[0], "sampled_rep": sr[0]}
+                       for p, g, s, sr in zip(rp[:nr], greedy[:nr], sampled[:nr], sampled_rep[:nr])]
     gold = READABLE["maths_gold"]
-    res["readable_maths_correct"] = {"greedy": sum(last_number(r["greedy"]) == a for r, a in zip(res["readable"][30:], gold)),
-                                     "sampled": sum(last_number(r["sampled"]) == a for r, a in zip(res["readable"][30:], gold))}
+    res["readable_maths_correct"] = {m: sum(last_number(r[m]) == a for r, a in zip(res["readable"][30:], gold))
+                                     for m in ("greedy", "sampled", "sampled_rep")}
     del model
     torch.cuda.empty_cache()
 
@@ -286,11 +294,14 @@ def report(out_dir, names):
     L.append("Side by side in `readable.md`. Maths prompts answered correctly (last number = gold, of 10):\n")
     L.append("| decoding | " + " | ".join(arms) + " |")
     L.append("|---|" + "---|" * len(arms))
-    for mode in ("greedy", "sampled"):
+    modes = [m for m in ("greedy", "sampled", "sampled_rep") if all(m in R[n]["rates"] for n in names)]
+    for mode in modes:
         L.append(f"| {mode} | " + " | ".join(fmt_arm([R[n]["readable_maths_correct"][mode] for n in ns], "{:.0f}")
                                            for ns in arms.values()) + " |")
 
     L.append("\n## Story val (forgetting), before -> after\n")
+    if base and base.get("forgetting_set"):
+        L.append(f"Forgetting set: {base['forgetting_set']}.\n")
     sv = "story (forgetting)"
     if base:
         L.append(f"Before = the base `{Path(base['checkpoint']).parent.name}` scored by this code: {base['val'][sv]:.4f}.\n")
@@ -322,7 +333,7 @@ def report(out_dir, names):
                for ns in arms.values()]
         L.append(f"| {kind} | " + " | ".join(row) + " |")
 
-    for mode in ("greedy", "sampled"):
+    for mode in modes:
         st = next(iter(R.values()))["rates"][mode]
         L.append(f"\n## Format and repetition, {mode} (n = {st['n']} prompts)\n")
         L.append("| metric | " + " | ".join(arms) + " |")
@@ -346,18 +357,18 @@ def report(out_dir, names):
 
     # readable set, side by side: one table per prompt, a row per checkpoint
     cut = lambda t: t.replace("|", "\\|").replace("\n", "<br>")  # noqa: E731
-    M = ["# Readable set, side by side\n", "Greedy and one sampled reply (temperature 0.7, top-k 40, no repetition "
-         "penalty) per checkpoint.\n"]
+    M = ["# Readable set, side by side\n", "Greedy, one sampled reply (temperature 0.7, top-k 40, no repetition penalty) and, "
+         "where scored, sampled_rep (temperature 0.7, top-p 0.9, repetition penalty 1.15) per checkpoint.\n"]
     first = next(iter(R.values()))["readable"]
     for i, row in enumerate(first):
         if i % 10 == 0:
             M.append(f"\n## {RCATS[i // 10]}\n")
         M.append(f"\n### {i + 1}. {row['prompt']}\n")
-        M.append("| checkpoint | greedy | sampled |")
-        M.append("|---|---|---|")
+        M.append("| checkpoint | " + " | ".join(modes) + " |")
+        M.append("|---|" + "---|" * len(modes))
         for n in names:
             r = R[n]["readable"][i]
-            M.append(f"| {n} | {cut(r['greedy'])} | {cut(r['sampled'])} |")
+            M.append(f"| {n} | " + " | ".join(cut(r[m]) for m in modes) + " |")
     (out_dir / "readable.md").write_text("\n".join(M) + "\n", encoding="utf-8")
     print((out_dir / "summary.md").read_text())
 
@@ -369,13 +380,17 @@ def base_val(path, sets, out_dir):
     model = COSFOscillatorTransformer(ckpt["config"]).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
-    res = {"checkpoint": rel(path), "val": val_losses(model, sets)}
+    vocab = ckpt["config"].vocab_size
+    res = {"checkpoint": rel(path), "val": val_losses(model, sets),
+           "forgetting_set": (f"512 windows of {ft.BASE_CORPUS[vocab]} val (the base's pretraining corpus)"
+                              if vocab in ft.BASE_CORPUS else "512 styled TinyStories val windows")}
     (out_dir / "base_val.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
     del model
     torch.cuda.empty_cache()
 
 
 def main():
+    global SEQ
     p = argparse.ArgumentParser()
     p.add_argument("ckpts", nargs="*", help="NAME=path/to/best_model.pt")
     p.add_argument("--out", default="experiments/results/ab_distill")
@@ -383,12 +398,15 @@ def main():
     p.add_argument("--base", default=None, help="base checkpoint: its val losses become the 'before' of story val")
     p.add_argument("--report-only", action="store_true", help="rebuild summary.md/readable.md from the saved JSON")
     p.add_argument("--names", default=None, help="comma-separated order for the report (default: every JSON in --out)")
+    p.add_argument("--vocab", type=int, default=16000, help="vocab size of the checkpoints (picks the tokenizer and forgetting set)")
+    p.add_argument("--seq-len", type=int, default=SEQ, help="context window for val sets and generation")
     args = p.parse_args()
+    SEQ = ft.SEQ = args.seq_len  # generate() and ft.build_chat_tensors read the module-level window
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     if not args.report_only:
-        tok = BPETokenizer(str(ROOT / "models/tokenizer_mix16k.model"))
-        sets, chat_val_lines, pilot_by_cat = frozen_sets(tok, ROOT / args.pilot)
+        tok = BPETokenizer(str(ROOT / tokenizer_for_vocab(args.vocab)))
+        sets, chat_val_lines, pilot_by_cat = frozen_sets(tok, ROOT / args.pilot, args.vocab)
         rprompts = rate_prompts(chat_val_lines, pilot_by_cat)
         skip = set()
         for line in open(ROOT / "data/cosf_distill_verified.jsonl", encoding="utf-8"):

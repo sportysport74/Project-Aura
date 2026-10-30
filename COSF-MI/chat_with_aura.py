@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src" / "python"))
 
 from cosf_mi.models.cosf_oscillator import COSFOscillatorTransformer
-from cosf_mi.data.tokenizer import BPETokenizer
+from cosf_mi.data.tokenizer import BPETokenizer, tokenizer_for_vocab
 
 
 DEFAULT_CHECKPOINTS = [
@@ -187,8 +187,7 @@ def main():
     # Load tokenizer
     print()
     print("Loading tokenizer...")
-    tokenizer = BPETokenizer("models/tokenizer_mix16k.model" if config.vocab_size == 16000
-                             else "models/tokenizer_8k.model")
+    tokenizer = BPETokenizer(tokenizer_for_vocab(config.vocab_size))
     print(f"  Vocab size: {tokenizer.vocab_size}")
 
     # Check device

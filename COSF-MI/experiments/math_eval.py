@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src" / "python"))
 import chat_with_aura as chat  # noqa: E402
-from cosf_mi.data.tokenizer import BPETokenizer  # noqa: E402
+from cosf_mi.data.tokenizer import BPETokenizer, tokenizer_for_vocab  # noqa: E402
 
 NAMES = ["Tom", "Mia", "Sam", "Lena", "Omar", "Ivy"]
 THINGS = ["apples", "coins", "books", "stickers", "marbles", "cookies"]
@@ -57,8 +57,7 @@ def last_number(text):
 
 def run(checkpoint, exam, device):
     model, config, fmt = chat.load_model(checkpoint)
-    tok = BPETokenizer(str(ROOT / ("models/tokenizer_mix16k.model" if config.vocab_size == 16000
-                                   else "models/tokenizer_8k.model")))
+    tok = BPETokenizer(str(ROOT / tokenizer_for_vocab(config.vocab_size)))
     rows = []
     for i, (kind, q, a) in enumerate(exam):
         torch.manual_seed(i)

@@ -32,12 +32,14 @@ import torch
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src" / "python"))
 from cosf_mi.models.cosf_oscillator import COSFOscillatorTransformer  # noqa: E402
-from cosf_mi.data.tokenizer import BPETokenizer  # noqa: E402
+from cosf_mi.data.tokenizer import BPETokenizer, tokenizer_for_vocab  # noqa: E402
+from cosf_mi.data.memmap_dataset import load_corpus  # noqa: E402
 from cosf_mi.data.token_dataset_fast import create_datasets_fast  # noqa: E402
 from cosf_mi.training.replay import ReplayMemory, replay_sleep  # noqa: E402
 
 SEQ = 256
 USER, AURA = "You:", "Aura:"
+BASE_CORPUS = {24000: "data/corpus_v1/tok24k_v2"}  # replay + forgetting data for corpus-pretrained bases
 IGNORE = -100
 
 
@@ -190,9 +192,10 @@ def main():
     print(f"Precision: {args.precision}, compile: {args.compile}, seed: {args.seed}")
 
     # the base model's vocab says which tokenizer/pretraining data it came from
-    mix = ckpt["config"].vocab_size == 16000
-    tok = BPETokenizer(str(ROOT / ("models/tokenizer_mix16k.model" if mix else "models/tokenizer_8k.model")))
-    base_data = ROOT / ("data/mix" if mix else "data/tinystories")
+    vocab = ckpt["config"].vocab_size
+    tok = BPETokenizer(str(ROOT / tokenizer_for_vocab(vocab)))
+    base_data = ROOT / ("data/mix" if vocab == 16000 else "data/tinystories")
+    base_corpus = ROOT / BASE_CORPUS[vocab] if vocab in BASE_CORPUS else None
     lines = Path(args.data).read_text(encoding="utf-8").splitlines()[:-1]  # last line may be cut off
     random.Random(1234).shuffle(lines)
     lines = lines[:args.conversations]
@@ -221,13 +224,18 @@ def main():
     print(f"  train {len(train_x):,}  val {len(val_x):,}  "
           f"(reply tokens per conversation: {(train_y != IGNORE).sum().item() / len(train_x):.0f})")
 
-    # Story data: replay memory and a story val set to measure forgetting
-    with contextlib.redirect_stdout(io.StringIO()):
-        story_train, story_val = create_datasets_fast(
-            train_path=str(base_data / "styled_train.txt"),
-            val_path=str(base_data / "styled_val.txt"),
-            tokenizer=tok, seq_len=SEQ, cache_dir=str(ROOT / "cache/tokenized_styled"),
-        )
+    # Story data: replay memory and a story val set to measure forgetting. A corpus-pretrained base (24k vocab)
+    # replays its own pretraining corpus instead, and "story val" is that corpus's val split.
+    if base_corpus:
+        story_train, story_val, _ = load_corpus(base_corpus, SEQ)
+        print(f"  replay + forgetting data: {base_corpus.relative_to(ROOT)} (story val = corpus val)")
+    else:
+        with contextlib.redirect_stdout(io.StringIO()):
+            story_train, story_val = create_datasets_fast(
+                train_path=str(base_data / "styled_train.txt"),
+                val_path=str(base_data / "styled_val.txt"),
+                tokenizer=tok, seq_len=SEQ, cache_dir=str(ROOT / "cache/tokenized_styled"),
+            )
     g = torch.Generator().manual_seed(1234)
     vidx = torch.randperm(len(story_val), generator=g)[:512]
     sv = [story_val[int(i)] for i in vidx]
