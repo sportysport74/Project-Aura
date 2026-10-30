@@ -63,6 +63,7 @@ def train_with_gentle_sleep(
     amp_dtype=None,
     eval_batches=0,
     save_final=False,
+    sleep=True,
 ):
     """Train model with gentle sleep cycles.
 
@@ -168,7 +169,7 @@ def train_with_gentle_sleep(
                 })
 
                 # Custom sleep trigger with gentle mode
-                if sleep_hook.check_and_sleep(model, global_step, loss_value):
+                if sleep and sleep_hook.check_and_sleep(model, global_step, loss_value):
                     # Sleep was triggered - apply gentle reset
                     # Note: sleep_hook already called model.apply_homeostatic_reset()
                     # We just need to configure the decay rate
@@ -390,6 +391,9 @@ def main():
                              'replaces --data-dir and --tokenizer')
     parser.add_argument('--matmul-precision', type=str, default='highest', choices=['highest', 'high'],
                         help="fp32 matmuls (the oscillators' Ω·x): 'highest' = true fp32, 'high' = TF32 tensor cores")
+    parser.add_argument('--sleep', action=argparse.BooleanOptionalAction, default=True,
+                        help='Gentle sleep cycles (homeostatic reset). Epoch 1 forces one by step 50k, so runs longer than '
+                             'that differ from the sweep (12k steps, never slept) unless --no-sleep')
     parser.add_argument('--compile', action=argparse.BooleanOptionalAction, default=True,
                         help='torch.compile the model forward in place (checkpoint keys unchanged); --no-compile for eager')
 
@@ -644,6 +648,7 @@ def main():
         amp_dtype=torch.bfloat16 if args.precision == 'bf16' else None,
         eval_batches=args.eval_batches,
         save_final=args.save_final,
+        sleep=args.sleep,
     )
 
     print()

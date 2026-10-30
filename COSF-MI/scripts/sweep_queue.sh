@@ -7,15 +7,16 @@
 # Stops on the first failure (set -e) and never retries. A CUDA error is reported as such.
 # A run whose final_model.pt exists is skipped, so relaunching by hand continues where it stopped.
 # Run via launch_train.sh with TRAIN_CMD="bash scripts/sweep_queue.sh".
+# SIZES / SEEDS / ARMS override the grid, e.g. SIZES=l100 SEEDS="4 5 6" ARMS="on control" (extra seeds, same results.tsv).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
 RES=experiments/results/sweep/results.tsv
 STEPS=12207
 [ -f "$RES" ] || printf "size\tarm\tseed\tval_loss\tmedian_tok_s\tpeak_gib\tminutes\n" > "$RES"
-for size in s25 m50 l100; do
-  for seed in 1 2 3; do
-    for arm in on off control; do
+for size in ${SIZES:-s25 m50 l100}; do
+  for seed in ${SEEDS:-1 2 3}; do
+    for arm in ${ARMS:-on off control}; do
       out=checkpoints/sweep/${size}_${arm}_s${seed}
       if [ -f "$out/final_model.pt" ]; then echo "=== skip ${size} ${arm} s${seed} (done)"; continue; fi
       mkdir -p "$out"
