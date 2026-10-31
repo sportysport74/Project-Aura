@@ -57,6 +57,7 @@ def last_number(text):
 
 def run(checkpoint, exam, device):
     model, config, fmt = chat.load_model(checkpoint)
+    fmt = fmt or {"user": "You:", "aura": "Aura:"}  # pretrain checkpoints carry none; finetune_chat.USER/AURA
     tok = BPETokenizer(str(ROOT / tokenizer_for_vocab(config.vocab_size)))
     rows = []
     for i, (kind, q, a) in enumerate(exam):

@@ -72,6 +72,13 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**Resume point (2026-10-30 19:10):** branch `distill-investigation`, not pushed. Night queue done: full l100 pretrain
+`COSF-MI/checkpoints/pretrain/l100_on_s1` (val 2.8769). Seeds 4-6: n=6 control−on +0.068, but control is seed-sensitive and there is no batch
+effect (`experiments/results/sweep/control_check.md`; proposed check, not run: rerun control s1 bit-for-bit). Distill FT on the l100 base
+(`experiments/results/ft_l100/notes.md`): forgetting halved, arithmetic held (corpus-format 53%→50%), but the voice is still simile soup
+over wrong facts. Batteries depend on prompt encoding (piece-by-piece vs one encode); use `base_arith_eval.py --max-new 160` to compare
+base vs FT. Next: decide between a factuality-graded explain set, a fact-first rewrite of the pilot explain slice, or more pretraining.
+
 **Resume point (2026-10-29 21:00):** scaling sweep **DONE, 27/27**. Results in `COSF-MI/experiments/results/sweep/{results.tsv,summary.md}`.
 Reading (user-corrected): **most of the gain is any phase-coherence loss, with synchrony possibly adding a small part.** At l100, off→control is
 +0.091 and control→on +0.029 (paired p 0.029, n=3, thin); s25 +0.054/+0.006, m50 +0.068/+0.039. Next: the night queue

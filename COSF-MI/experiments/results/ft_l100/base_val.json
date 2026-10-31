@@ -1,0 +1,16 @@
+{
+ "checkpoint": "checkpoints/pretrain/l100_on_s1/best_model.pt",
+ "val": {
+  "chat (TinyChat)": 3.506979637916355,
+  "old distill": 3.3498897529328135,
+  "story (forgetting)": 2.840605467557907,
+  "pilot arith": 1.3928362853500582,
+  "pilot chat": 3.0275701500118277,
+  "pilot explain": 3.0173677684209137,
+  "pilot gsm8k": 1.8052374828940583,
+  "pilot oasst2": 3.1592388964365745,
+  "pilot story": 2.2682498330690586,
+  "pilot all": 2.413955958986325
+ },
+ "forgetting_set": "512 windows of data/corpus_v1/tok24k_v2 val (the base's pretraining corpus)"
+}

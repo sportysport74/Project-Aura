@@ -1,0 +1,416 @@
+{
+ "name": "l100_sweep_on_s1",
+ "checkpoint": "checkpoints/sweep/l100_on_s1/final_model.pt",
+ "templates": {
+  "what_is": {
+   "cells": {
+    "+ 1-digit": 0.13333333333333333,
+    "+ 2-digit": 0.0,
+    "+ 3-digit": 0.0,
+    "- 1-digit": 0.2,
+    "- 2-digit": 0.0,
+    "- 3-digit": 0.0,
+    "× 1-digit": 0.03333333333333333,
+    "× 2-digit": 0.0,
+    "× 3-digit": 0.0,
+    "÷ 1-digit divisor": 0.05,
+    "÷ 2-digit divisor": 0.05
+   },
+   "ALL": 0.036585365853658534,
+   "examples": {
+    "+ 1-digit": [
+     [
+      "What is 4 + 7?",
+      "4 + 7 = 10\n\nAnswer: 10",
+      false
+     ],
+     [
+      "What is 4 + 1?",
+      "4 + 1 = 10\n\nAnswer: 10",
+      false
+     ],
+     [
+      "What is 2 + 9?",
+      "2 + 9 = 10\n\nAnswer: 10",
+      false
+     ]
+    ],
+    "+ 2-digit": [
+     [
+      "What is 31 + 79?",
+      "31 + 79 = 79\n\nAnswer: 79",
+      false
+     ],
+     [
+      "What is 89 + 90?",
+      "89 + 90 = 90\n\nAnswer: 90",
+      false
+     ],
+     [
+      "What is 17 + 52?",
+      "17 + 52 = 17\n\nAnswer: 17",
+      false
+     ]
+    ],
+    "+ 3-digit": [
+     [
+      "What is 768 + 732?",
+      "768 + 732 = 768\n\nAnswer: 768",
+      false
+     ],
+     [
+      "What is 108 + 269?",
+      "108 + 269 = 269\n\nAnswer: 269",
+      false
+     ],
+     [
+      "What is 998 + 794?",
+      "998 + 794 = 1993\n\nAnswer: 1993",
+      false
+     ]
+    ],
+    "- 1-digit": [
+     [
+      "What is 7 - 7?",
+      "7 - 7 = 1\n\nAnswer: 1",
+      false
+     ],
+     [
+      "What is 8 - 3?",
+      "8 - 3 = 1\n\nAnswer: 1",
+      false
+     ],
+     [
+      "What is 6 - 5?",
+      "6 - 5 = 1\n\nAnswer: 1",
+      true
+     ]
+    ],
+    "- 2-digit": [
+     [
+      "What is 96 - 25?",
+      "96 - 25 = 96\n\nAnswer: 96",
+      false
+     ],
+     [
+      "What is 80 - 15?",
+      "80 - 15 = 80\n\nAnswer: 80",
+      false
+     ],
+     [
+      "What is 46 - 26?",
+      "46 - 26 = 46\n\nAnswer: 46",
+      false
+     ]
+    ],
+    "- 3-digit": [
+     [
+      "What is 997 - 878?",
+      "997 - 878 = 997\n\nAnswer: 997",
+      false
+     ],
+     [
+      "What is 552 - 417?",
+      "552 - 417 = 552\n\nAnswer: 552",
+      false
+     ],
+     [
+      "What is 948 - 197?",
+      "948 - 197 = 948\n\nAnswer: 948",
+      false
+     ]
+    ],
+    "× 1-digit": [
+     [
+      "What is 6 × 7?",
+      "6 × 7 = 10\n\nAnswer: 10",
+      false
+     ],
+     [
+      "What is 4 × 6?",
+      "4 × 6 = 10\n\nAnswer: 10",
+      false
+     ],
+     [
+      "What is 4 × 8?",
+      "4 × 8 = 10\n\nAnswer: 10",
+      false
+     ]
+    ],
+    "× 2-digit": [
+     [
+      "What is 57 × 63?",
+      "57 × 63 = 1240\n\nAnswer: 1240",
+      false
+     ],
+     [
+      "What is 53 × 33?",
+      "53 × 33 = 1240\n\nAnswer: 1240",
+      false
+     ],
+     [
+      "What is 82 × 32?",
+      "82 × 32 = 1200\n\nAnswer: 1200",
+      false
+     ]
+    ],
+    "× 3-digit": [
+     [
+      "What is 355 × 736?",
+      "355 × 736 = 156000\n\nAnswer: 156000",
+      false
+     ],
+     [
+      "What is 927 × 178?",
+      "927 × 178 = 122800\n\nAnswer: 122800",
+      false
+     ],
+     [
+      "What is 916 × 429?",
+      "916 × 429 = 112160\n\nAnswer: 112160",
+      false
+     ]
+    ],
+    "÷ 1-digit divisor": [
+     [
+      "What is 160 ÷ 5?",
+      "160 ÷ 5 = 2\n\nAnswer: 2",
+      false
+     ],
+     [
+      "What is 486 ÷ 6?",
+      "486 ÷ 6 = 38\n\nAnswer: 38",
+      false
+     ],
+     [
+      "What is 252 ÷ 6?",
+      "252 ÷ 6 = 2\n\nAnswer: 2",
+      false
+     ]
+    ],
+    "÷ 2-digit divisor": [
+     [
+      "What is 605 ÷ 55?",
+      "605 ÷ 55 = 6\n\nAnswer: 6",
+      false
+     ],
+     [
+      "What is 2982 ÷ 42?",
+      "2982 ÷ 42 = 29\n\nAnswer: 29",
+      false
+     ],
+     [
+      "What is 213 ÷ 71?",
+      "213 ÷ 71 = 2\n\nAnswer: 2",
+      false
+     ]
+    ]
+   }
+  },
+  "equals": {
+   "cells": {
+    "+ 1-digit": 0.13333333333333333,
+    "+ 2-digit": 0.0,
+    "+ 3-digit": 0.0,
+    "- 1-digit": 0.2,
+    "- 2-digit": 0.0,
+    "- 3-digit": 0.0,
+    "× 1-digit": 0.06666666666666667,
+    "× 2-digit": 0.0,
+    "× 3-digit": 0.0,
+    "÷ 1-digit divisor": 0.025,
+    "÷ 2-digit divisor": 0.025
+   },
+   "ALL": 0.03414634146341464,
+   "examples": {
+    "+ 1-digit": [
+     [
+      "4 + 7 = ?",
+      "4 + 7 = 11\n\nAnswer: 11",
+      true
+     ],
+     [
+      "4 + 1 = ?",
+      "4 + 1 = 10\n\nAnswer: 10",
+      false
+     ],
+     [
+      "2 + 9 = ?",
+      "2 + 9 = 10\n\nAnswer: 10",
+      false
+     ]
+    ],
+    "+ 2-digit": [
+     [
+      "31 + 79 = ?",
+      "31 + 79 = 79\n\nAnswer: 79",
+      false
+     ],
+     [
+      "89 + 90 = ?",
+      "89 + 90 = 90\n\nAnswer: 90",
+      false
+     ],
+     [
+      "17 + 52 = ?",
+      "17 + 52 = 17\n\nAnswer: 17",
+      false
+     ]
+    ],
+    "+ 3-digit": [
+     [
+      "768 + 732 = ?",
+      "768 + 732 = 769\n\nAnswer: 769",
+      false
+     ],
+     [
+      "108 + 269 = ?",
+      "108 + 269 = 269\n\nAnswer: 269",
+      false
+     ],
+     [
+      "998 + 794 = ?",
+      "998 + 794 = 1993\n\nAnswer: 1993",
+      false
+     ]
+    ],
+    "- 1-digit": [
+     [
+      "7 - 7 = ?",
+      "7 - 7 = 1\n\nAnswer: 1",
+      false
+     ],
+     [
+      "8 - 3 = ?",
+      "8 - 3 = 1\n\nAnswer: 1",
+      false
+     ],
+     [
+      "6 - 5 = ?",
+      "6 - 5 = 1\n\nAnswer: 1",
+      true
+     ]
+    ],
+    "- 2-digit": [
+     [
+      "96 - 25 = ?",
+      "96 - 25 = 16\n\nAnswer: 16",
+      false
+     ],
+     [
+      "80 - 15 = ?",
+      "80 - 15 = 80\n\nAnswer: 80",
+      false
+     ],
+     [
+      "46 - 26 = ?",
+      "46 - 26 = 46\n\nAnswer: 46",
+      false
+     ]
+    ],
+    "- 3-digit": [
+     [
+      "997 - 878 = ?",
+      "997 - 878 = 997\n\nAnswer: 997",
+      false
+     ],
+     [
+      "552 - 417 = ?",
+      "552 - 417 = 552\n\nAnswer: 552",
+      false
+     ],
+     [
+      "948 - 197 = ?",
+      "948 - 197 = 948\n\nAnswer: 948",
+      false
+     ]
+    ],
+    "× 1-digit": [
+     [
+      "6 × 7 = ?",
+      "6 × 7 = 12\n\nAnswer: 12",
+      false
+     ],
+     [
+      "4 × 6 = ?",
+      "4 × 6 = 12\n\nAnswer: 12",
+      false
+     ],
+     [
+      "4 × 8 = ?",
+      "4 × 8 = 12\n\nAnswer: 12",
+      false
+     ]
+    ],
+    "× 2-digit": [
+     [
+      "57 × 63 = ?",
+      "57 × 63 = 1240\n\nAnswer: 1240",
+      false
+     ],
+     [
+      "53 × 33 = ?",
+      "53 × 33 = 1240\n\nAnswer: 1240",
+      false
+     ],
+     [
+      "82 × 32 = ?",
+      "82 × 32 = 222\n\nAnswer: 222",
+      false
+     ]
+    ],
+    "× 3-digit": [
+     [
+      "355 × 736 = ?",
+      "355 × 736 = 151500\n\nAnswer: 151500",
+      false
+     ],
+     [
+      "927 × 178 = ?",
+      "927 × 178 = 122820\n\nAnswer: 122820",
+      false
+     ],
+     [
+      "916 × 429 = ?",
+      "916 × 429 = 129240\n\nAnswer: 129240",
+      false
+     ]
+    ],
+    "÷ 1-digit divisor": [
+     [
+      "160 ÷ 5 = ?",
+      "160 ÷ 5 = 6\n\nAnswer: 6",
+      false
+     ],
+     [
+      "486 ÷ 6 = ?",
+      "486 ÷ 6 = 48\n\nAnswer: 48",
+      false
+     ],
+     [
+      "252 ÷ 6 = ?",
+      "252 ÷ 6 = 2\n\nAnswer: 2",
+      false
+     ]
+    ],
+    "÷ 2-digit divisor": [
+     [
+      "605 ÷ 55 = ?",
+      "605 ÷ 55 = 6\n\nAnswer: 6",
+      false
+     ],
+     [
+      "2982 ÷ 42 = ?",
+      "2982 ÷ 42 = 29\n\nAnswer: 29",
+      false
+     ],
+     [
+      "213 ÷ 71 = ?",
+      "213 ÷ 71 = 2\n\nAnswer: 2",
+      false
+     ]
+    ]
+   }
+  }
+ }
+}

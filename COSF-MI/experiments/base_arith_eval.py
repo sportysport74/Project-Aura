@@ -77,13 +77,14 @@ def main():
     p.add_argument("ckpts", nargs="+", help="NAME=path/to/checkpoint.pt (repo-relative)")
     p.add_argument("--tokenizer", default="models/tokenizer_clean24k.model")
     p.add_argument("--out", default="experiments/results/base_arith")
+    p.add_argument("--max-new", type=int, default=48, help="reply cap; fine-tunes need ~160 for their worked preamble")
     args = p.parse_args()
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     sp = spm.SentencePieceProcessor(model_file=str(ROOT / args.tokenizer))
     bat = battery()
     L = ["# Arithmetic battery on base models (no fine-tune)\n",
-         "Greedy exact match, 410 problems. Prompt `You: {q}\\nAura:` as in the corpus. 1-digit cells = fact recall.\n"]
+         f"Greedy exact match, 410 problems, reply cap {args.max_new} tokens. Prompt `You: {{q}}\\nAura:` as in the corpus. 1-digit cells = fact recall.\n"]
     for spec in args.ckpts:
         name, path = spec.split("=", 1)
         ckpt = torch.load(ROOT / path, map_location="cpu", weights_only=False)
@@ -94,7 +95,7 @@ def main():
         res = {"name": name, "checkpoint": path, "templates": {}}
         for tname, tmpl in TEMPLATES.items():
             prompts = [tmpl.format(a=b["a"], op=SYM[b["op"]], b=b["b"]) for b in bat]
-            replies = greedy(model, sp, prompts, seq)
+            replies = greedy(model, sp, prompts, seq, max_new=args.max_new)
             by, ex = defaultdict(list), defaultdict(list)
             for b, q, r in zip(bat, prompts, replies):
                 ok = answer(r) == GOLD[b["op"]](b["a"], b["b"])

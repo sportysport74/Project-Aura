@@ -1,0 +1,416 @@
+{
+ "name": "ft_l100_s1",
+ "checkpoint": "checkpoints/ft_l100_s1/best_model.pt",
+ "templates": {
+  "what_is": {
+   "cells": {
+    "+ 1-digit": 0.9666666666666667,
+    "+ 2-digit": 0.65,
+    "+ 3-digit": 0.6,
+    "- 1-digit": 1.0,
+    "- 2-digit": 0.725,
+    "- 3-digit": 0.55,
+    "× 1-digit": 0.8666666666666667,
+    "× 2-digit": 0.05,
+    "× 3-digit": 0.0,
+    "÷ 1-digit divisor": 0.3,
+    "÷ 2-digit divisor": 0.375
+   },
+   "ALL": 0.524390243902439,
+   "examples": {
+    "+ 1-digit": [
+     [
+      "What is 4 + 7?",
+      "4 + 7 = 11\n\nAnswer: 11",
+      true
+     ],
+     [
+      "What is 4 + 1?",
+      "4 + 1 = 5\n\nAnswer: 5",
+      true
+     ],
+     [
+      "What is 2 + 9?",
+      "2 + 9 = 11\n\nAnswer: 11",
+      true
+     ]
+    ],
+    "+ 2-digit": [
+     [
+      "What is 31 + 79?",
+      "Imagine adding 31 and 79 is like combining two piles of blocks; one pile has 31 blocks and the other has 79. Let's count them together!\n\n31 + 79 = 100\n\nAnswer: 100",
+      false
+     ],
+     [
+      "What is 89 + 90?",
+      "Imagine adding 89 and 90 is like combining two piles of blocks; one pile has 89 blocks and the other has 90. When you combine them, you get a big pile of 90 blocks!\n\n89 + 90 = 189\n\nAnswer: 189",
+      false
+     ],
+     [
+      "What is 17 + 52?",
+      "Imagine adding 17 and 52 is like combining two piles of blocks; one pile has 17 blocks and the other has 52. Let's count them together!\n\n17 + 52 = 69\n\nAnswer: 69",
+      true
+     ]
+    ],
+    "+ 3-digit": [
+     [
+      "What is 768 + 732?",
+      "Imagine adding 768 and 732 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n768 + 732 = 1590\n\nAnswer: 1590",
+      false
+     ],
+     [
+      "What is 108 + 269?",
+      "Imagine adding 108 and 269 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n108 + 269 = 377\n\nAnswer: 377",
+      true
+     ],
+     [
+      "What is 998 + 794?",
+      "Imagine adding 998 and 794 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n998 + 794 = 1782\n\nAnswer: 1782",
+      false
+     ]
+    ],
+    "- 1-digit": [
+     [
+      "What is 7 - 7?",
+      "7 - 7 = 0\n\nAnswer: 0",
+      true
+     ],
+     [
+      "What is 8 - 3?",
+      "8 - 3 = 5\n\nAnswer: 5",
+      true
+     ],
+     [
+      "What is 6 - 5?",
+      "6 - 5 = 1\n\nAnswer: 1",
+      true
+     ]
+    ],
+    "- 2-digit": [
+     [
+      "What is 96 - 25?",
+      "96 - 25 = 71\n\nAnswer: 71",
+      true
+     ],
+     [
+      "What is 80 - 15?",
+      "80 - 15 = 65\n\nAnswer: 65",
+      true
+     ],
+     [
+      "What is 46 - 26?",
+      "46 - 26 = 10\n\nAnswer: 10",
+      false
+     ]
+    ],
+    "- 3-digit": [
+     [
+      "What is 997 - 878?",
+      "997 - 878 = 129\n\nAnswer: 129",
+      false
+     ],
+     [
+      "What is 552 - 417?",
+      "552 - 417 = 135\n\nAnswer: 135",
+      true
+     ],
+     [
+      "What is 948 - 197?",
+      "948 - 197 = 751\n\nAnswer: 751",
+      true
+     ]
+    ],
+    "× 1-digit": [
+     [
+      "What is 6 × 7?",
+      "6 × 7 = 48\n\nAnswer: 48",
+      false
+     ],
+     [
+      "What is 4 × 6?",
+      "4 × 6 = 24\n\nAnswer: 24",
+      true
+     ],
+     [
+      "What is 4 × 8?",
+      "4 × 8 = 32\n\nAnswer: 32",
+      true
+     ]
+    ],
+    "× 2-digit": [
+     [
+      "What is 57 × 63?",
+      "57 × 63 = 3111\n\nAnswer: 3111",
+      false
+     ],
+     [
+      "What is 53 × 33?",
+      "53 × 33 = 1511\n\nAnswer: 1511",
+      false
+     ],
+     [
+      "What is 82 × 32?",
+      "Imagine multiplying is like giving each number a hug, and 82 is giving 32 a big, friendly hug! \n\n82 × 32 = 2636\n\nAnswer: 2636",
+      false
+     ]
+    ],
+    "× 3-digit": [
+     [
+      "What is 355 × 736?",
+      "355 × 736 = 273550\n\nAnswer: 273550",
+      false
+     ],
+     [
+      "What is 927 × 178?",
+      "Imagine multiplying is like giving each number a hug, and 927 is giving 178 a big, friendly hug! \n\n927 × 178 = 168552\n\nAnswer: 168552",
+      false
+     ],
+     [
+      "What is 916 × 429?",
+      "Imagine multiplying is like giving each number a hug, and 916 is giving 429 a big, friendly hug! \n\n916 × 429 = 405552\n\nAnswer: 405552",
+      false
+     ]
+    ],
+    "÷ 1-digit divisor": [
+     [
+      "What is 160 ÷ 5?",
+      "Dividing 160 by 5 is like sharing 160 candies equally among 5 friends. Each friend would get 16 candies!\n\n160 ÷ 5 = 30\n\nAnswer: 30",
+      false
+     ],
+     [
+      "What is 486 ÷ 6?",
+      "Dividing 486 by 6 is like sharing 486 candies equally among 6 friends. Each friend would get a lot!\n\n486 ÷ 6 = 89\n\nAnswer: 89",
+      false
+     ],
+     [
+      "What is 252 ÷ 6?",
+      "Dividing 252 by 6 is like sharing 252 candies equally among 6 friends. Each friend would get 10 candies!\n\n252 ÷ 6 = 34\n\nAnswer: 34",
+      false
+     ]
+    ],
+    "÷ 2-digit divisor": [
+     [
+      "What is 605 ÷ 55?",
+      "Dividing 605 by 55 is like sharing 605 candies equally among 55 friends. Each friend would get a pretty good share!\n\n605 ÷ 55 = 11\n\nAnswer: 11",
+      true
+     ],
+     [
+      "What is 2982 ÷ 42?",
+      "Dividing 2982 by 42 is like sharing 2982 candies among 42 friends equally. Let's see how many each gets!\n\n2982 ÷ 42 = 64\n\nAnswer: 64",
+      false
+     ],
+     [
+      "What is 213 ÷ 71?",
+      "Dividing 213 by 71 is like sharing 213 candies among 71 friends equally. Each friend gets a fair share!\n\n213 ÷ 71 = 3\n\nAnswer: 3",
+      true
+     ]
+    ]
+   }
+  },
+  "equals": {
+   "cells": {
+    "+ 1-digit": 0.9333333333333333,
+    "+ 2-digit": 0.5,
+    "+ 3-digit": 0.425,
+    "- 1-digit": 1.0,
+    "- 2-digit": 0.7,
+    "- 3-digit": 0.55,
+    "× 1-digit": 0.9,
+    "× 2-digit": 0.05,
+    "× 3-digit": 0.0,
+    "÷ 1-digit divisor": 0.25,
+    "÷ 2-digit divisor": 0.425
+   },
+   "ALL": 0.4902439024390244,
+   "examples": {
+    "+ 1-digit": [
+     [
+      "4 + 7 = ?",
+      "4 + 7 = 11\n\nAnswer: 11",
+      true
+     ],
+     [
+      "4 + 1 = ?",
+      "4 + 1 = 5\n\nAnswer: 5",
+      true
+     ],
+     [
+      "2 + 9 = ?",
+      "2 + 9 = 11\n\nAnswer: 11",
+      true
+     ]
+    ],
+    "+ 2-digit": [
+     [
+      "31 + 79 = ?",
+      "Imagine adding 31 and 79 is like combining two piles of blocks; one pile has 31 blocks and the other has 79. Let's count them together!\n\n31 + 79 = 100\n\nAnswer: 100",
+      false
+     ],
+     [
+      "89 + 90 = ?",
+      "Imagine adding 89 and 90 is like combining two piles of blocks; one pile has 89 blocks and the other has 90. When you combine them, you get a tower of 111 blocks!\n\nAnswer: 111",
+      false
+     ],
+     [
+      "17 + 52 = ?",
+      "Imagine adding 17 and 52 is like combining two piles of blocks; one pile has 17 blocks and the other has 52. When you combine them, you get a tower of 17 blocks!\n\nAnswer: 17",
+      false
+     ]
+    ],
+    "+ 3-digit": [
+     [
+      "768 + 732 = ?",
+      "Imagine adding 768 and 732 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n768 + 732 = 1590\n\nAnswer: 1590",
+      false
+     ],
+     [
+      "108 + 269 = ?",
+      "Imagine adding 108 and 269 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n108 + 269 = 377\n\nAnswer: 377",
+      true
+     ],
+     [
+      "998 + 794 = ?",
+      "Imagine adding 998 and 794 is like stacking two piles of blocks; one pile is a bit taller, and the other is a bit taller. Let's see how high they get together!\n\n998 + 794 = 1782\n\nAnswer: 1782",
+      false
+     ]
+    ],
+    "- 1-digit": [
+     [
+      "7 - 7 = ?",
+      "7 - 7 = 0\n\nAnswer: 0",
+      true
+     ],
+     [
+      "8 - 3 = ?",
+      "8 - 3 = 5\n\nAnswer: 5",
+      true
+     ],
+     [
+      "6 - 5 = ?",
+      "6 - 5 = 1\n\nAnswer: 1",
+      true
+     ]
+    ],
+    "- 2-digit": [
+     [
+      "96 - 25 = ?",
+      "96 - 25 = 71\n\nAnswer: 71",
+      true
+     ],
+     [
+      "80 - 15 = ?",
+      "80 - 15 = 65\n\nAnswer: 65",
+      true
+     ],
+     [
+      "46 - 26 = ?",
+      "46 - 26 = 10\n\nAnswer: 10",
+      false
+     ]
+    ],
+    "- 3-digit": [
+     [
+      "997 - 878 = ?",
+      "997 - 878 = 129\n\nAnswer: 129",
+      false
+     ],
+     [
+      "552 - 417 = ?",
+      "552 - 417 = 135\n\nAnswer: 135",
+      true
+     ],
+     [
+      "948 - 197 = ?",
+      "948 - 197 = 751\n\nAnswer: 751",
+      true
+     ]
+    ],
+    "× 1-digit": [
+     [
+      "6 × 7 = ?",
+      "6 × 7 = 48\n\nAnswer: 48",
+      false
+     ],
+     [
+      "4 × 6 = ?",
+      "4 × 6 = 24\n\nAnswer: 24",
+      true
+     ],
+     [
+      "4 × 8 = ?",
+      "4 × 8 = 32\n\nAnswer: 32",
+      true
+     ]
+    ],
+    "× 2-digit": [
+     [
+      "57 × 63 = ?",
+      "57 × 63 = 3111\n\nAnswer: 3111",
+      false
+     ],
+     [
+      "53 × 33 = ?",
+      "53 × 33 = 1519\n\nAnswer: 1519",
+      false
+     ],
+     [
+      "82 × 32 = ?",
+      "82 × 32 = 2464\n\nAnswer: 2464",
+      false
+     ]
+    ],
+    "× 3-digit": [
+     [
+      "355 × 736 = ?",
+      "355 × 736 = 273550\n\nAnswer: 273550",
+      false
+     ],
+     [
+      "927 × 178 = ?",
+      "927 × 178 = 163556\n\nAnswer: 163556",
+      false
+     ],
+     [
+      "916 × 429 = ?",
+      "916 × 429 = 405334\n\nAnswer: 405334",
+      false
+     ]
+    ],
+    "÷ 1-digit divisor": [
+     [
+      "160 ÷ 5 = ?",
+      "Dividing 160 by 5 is like sharing 160 candies equally among 5 friends. Each friend would get 16 candies!\n\n160 ÷ 5 = 30\n\nAnswer: 30",
+      false
+     ],
+     [
+      "486 ÷ 6 = ?",
+      "Dividing 486 by 6 is like sharing 486 candies equally among 6 friends. Each friend would get a pretty good share!\n\n486 ÷ 6 = 89\n\nAnswer: 89",
+      false
+     ],
+     [
+      "252 ÷ 6 = ?",
+      "Dividing 252 by 6 is like sharing 252 candies among 6 friends equally. Each friend would get a lot!\n\n252 ÷ 6 = 48\n\nAnswer: 48",
+      false
+     ]
+    ],
+    "÷ 2-digit divisor": [
+     [
+      "605 ÷ 55 = ?",
+      "Dividing 605 by 55 is like sharing 605 candies equally among 55 friends. Each friend would get a pretty good share!\n\n605 ÷ 55 = 11\n\nAnswer: 11",
+      true
+     ],
+     [
+      "2982 ÷ 42 = ?",
+      "Dividing 2982 by 42 is like sharing 2982 candies among 42 friends equally. Let's see how many each gets!\n\n2982 ÷ 42 = 76\n\nAnswer: 76",
+      false
+     ],
+     [
+      "213 ÷ 71 = ?",
+      "Dividing 213 by 71 is like sharing 213 candies among 71 friends equally. Each friend gets a fair share!\n\n213 ÷ 71 = 3\n\nAnswer: 3",
+      true
+     ]
+    ]
+   }
+  }
+ }
+}
