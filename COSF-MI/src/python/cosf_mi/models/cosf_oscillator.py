@@ -161,6 +161,11 @@ class COSFOscillatorConfig:
     #           random offsets ψ_j, so it is met by a random phase pattern (true R ~ 0).
     #           The logged coherence is still the true R.
     heartbeat_mode: str = 'static'
+    # 'oscillator' (default): every projection (attention q/k/v/out, ff1, ff2) is a COSFOscillatorLayer.
+    # 'linear': the same model with each of those replaced by nn.Linear of the same shape (vanilla baseline, 2026-10-31):
+    #           no phases, so no heartbeat, Julia correction or chirality. Everything else (attention, layer norms,
+    #           positional encoding, the tanh FFN activation, tied embeddings) is unchanged.
+    projection: str = 'oscillator'
     heartbeat_strength: float = 0.01  # coupling_strength for the sync loss
     # If set, only penalize R below this target (sync band instead of
     # pushing R -> 1, which means every feature carries the same phase)
@@ -913,6 +918,7 @@ class KuramotoAttention(nn.Module):
         enable_chirality: bool = False,
         chirality_init_prob: float = 0.5,
         enable_terahertz_scaling: bool = False,
+        linear: bool = False,
     ):
         super().__init__()
 
@@ -966,6 +972,10 @@ class KuramotoAttention(nn.Module):
             chirality_init_prob=chirality_init_prob,
             enable_terahertz_scaling=enable_terahertz_scaling,
         )
+
+        if linear:  # vanilla baseline: plain projections of the same shape (config.projection == 'linear')
+            self.q_oscillator, self.k_oscillator, self.v_oscillator, self.out_oscillator = (
+                nn.Linear(d_model, d_model) for _ in range(4))
 
         self.dropout = nn.Dropout(dropout)
 
@@ -1107,6 +1117,7 @@ class COSFOscillatorBlock(nn.Module):
             enable_chirality=config.enable_chirality,
             chirality_init_prob=config.chirality_init_prob,
             enable_terahertz_scaling=config.enable_terahertz_scaling,
+            linear=getattr(config, 'projection', 'oscillator') == 'linear',
         )
 
         # Feed-forward network with oscillators
@@ -1134,6 +1145,10 @@ class COSFOscillatorBlock(nn.Module):
             chirality_init_prob=config.chirality_init_prob,
             enable_terahertz_scaling=config.enable_terahertz_scaling,
         )
+
+        if getattr(config, 'projection', 'oscillator') == 'linear':  # vanilla baseline
+            self.ff1 = nn.Linear(config.d_model, config.d_ff)
+            self.ff2 = nn.Linear(config.d_ff, config.d_model)
 
         # Layer norms (keep these standard)
         self.ln1 = nn.LayerNorm(config.d_model)
@@ -1297,6 +1312,9 @@ class COSFOscillatorTransformer(nn.Module):
                 )
 
                 # Compute Kuramoto coherence loss (AURA LEVEL 1: THE HEARTBEAT)
+                if return_coherence_loss and getattr(self.config, 'projection', 'oscillator') == 'linear':
+                    zero = task_loss.new_zeros(())  # no phases: no heartbeat (vanilla baseline)
+                    return logits, task_loss, zero, zero.detach()
                 if return_coherence_loss:
                     # Get current drift from first oscillator
                     # Drift = mean distance from rest frequency (φ)
@@ -1421,7 +1439,7 @@ class COSFOscillatorTransformer(nn.Module):
         Call AFTER optimizer.step() during training only (like
         apply_homeostatic_decay). No-op if config.apply_phase_correction is False.
         """
-        if not self.config.apply_phase_correction:
+        if not self.config.apply_phase_correction or getattr(self.config, 'projection', 'oscillator') == 'linear':
             return
         # φ-correction: any oscillator whose max |dθ/dt| exceeds the Julia bound gets its
         # frequencies scaled by 1/φ. Done for all oscillators at once on the GPU with no

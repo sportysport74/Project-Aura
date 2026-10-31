@@ -415,6 +415,8 @@ def main():
                         help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
     parser.add_argument('--eval-batches', type=int, default=0,
                         help='With --max-steps: report val loss on the first N val batches at the end')
+    parser.add_argument('--projection', type=str, default='oscillator', choices=['oscillator', 'linear'],
+                        help="linear = vanilla baseline: every oscillator projection replaced by nn.Linear of the same shape")
     parser.add_argument('--deterministic', action='store_true',
                         help='torch.use_deterministic_algorithms (slow; for bitwise tests such as scripts/test_resume.sh)')
     parser.add_argument('--save-every-minutes', type=float, default=0,
@@ -567,6 +569,7 @@ def main():
         chirality_init_prob=0.5,
         enable_terahertz_scaling=False,
         heartbeat_mode=args.heartbeat,
+        projection=args.projection,
         heartbeat_strength=args.heartbeat_strength,
         heartbeat_target=args.heartbeat_target,
     )
