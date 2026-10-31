@@ -64,6 +64,24 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
   weight; `experiments/chirality_history.py` tracks its sign changes. The explicit `flip_chirality()` is called only from tests, never in
   training. An optional per-token gate (`chirality_context_groups`) exists but isn't used in the current runs. Nothing is
   non-commutative: it's a learned per-feature scale on a sinusoid, trained by standard symmetric backprop.
+  - **What training did with it** (l100, 2.2B tokens, `checkpoints/pretrain/l100_on_s1`; 2026-10-31, `experiments/chirality_drift.py`,
+    full tables in `experiments/results/chirality/l100_on_s1.md`). The ±1 init was rebuilt exactly from seed 1 (check: the 200M-token
+    sweep run with the same seed keeps 100.00% of those signs).
+    - **Signs: frozen.** 99.95% kept their init sign (42 flips of 82,944, mostly attention-out in layers 0-1). Crossing zero makes
+      the oscillator's phase vanish, so a sign change is a barrier gradients almost never cross. In practice the handedness is the
+      **random pattern drawn at init**, not something learned.
+    - **Magnitudes: almost all shrank, none really grew.** Mean |χ| 0.62 (median 0.66, p5 0.30, p95 0.83). Only 0.3% grew above 1.1.
+      Per type: k shrank most (mean 0.50, 47% below 0.5), then q 0.58, ff2 0.60, ff1 0.64, out 0.68, v 0.69. Layers 0-2 shrank more
+      (≈0.52, ~39% below 0.5) than layers 5-11 (≈0.67); attention-out grows with depth (0.49 in layer 0 → 0.89 in layer 11).
+    - **Most of that shrink is weight decay, not learning.** χ isn't excluded from AdamW's weight decay (0.01; only `.phases` is), and
+      decay alone over this schedule (Σ lr ≈ 39.7) would leave every |χ| at **0.672**, close to the observed median 0.655. The
+      gradient signal is in the deviations from 0.67: k pushed further down, v/out (deep layers) held up.
+    - **The magnitude is partly unidentifiable.** χ multiplies Ω inside the phase (Ω·χ·x), so there only the product matters, and decay
+      can shrink χ while Ω grows to compensate. χ's own role is the weight of the sine term in cos θ + χ·sin θ.
+    - **Per-token gate:** off in this run (`chirality_context_groups = 0`), so there's nothing to report.
+    - **Reading:** today's chirality is a fixed random ±1 pattern plus a decayed sine/cosine mix weight. That's not yet the
+      direction-dependent dynamics in the vision. Before the ablation below, exclude χ from weight decay (like `.phases`), so its
+      magnitude reflects the gradient only.
 - **Experiments:**
   1. Ablation (cheap, s25/m50, 3 seeds, 200M tokens): chirality off (`enable_chirality=False`), fixed random (today), context-gated.
      If off = fixed, the sign pattern does nothing.
