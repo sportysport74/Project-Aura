@@ -53,6 +53,13 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
   checkpoint from its list. **Default chat checkpoint: `aura_chat_distill`** (user decision 2026-10-28; added first in the list, before
   `aura_chat_smart10`). The distill A/B's ft_v1 models are not a replacement at 33M (they loop in chat).
 - Tests: `.venv/bin/python -m pytest tests`
+- **Pause training to game:** `bash scripts/pause_train.sh` (the trainer saves its full state and exits in ~10 s; the queue stops
+  without starting its next stage; it prints the GPU memory so you can see it's free). **Resume:** `bash scripts/resume_train.sh` (checks
+  the 450 W cap first and refuses otherwise, then relaunches the queue recorded in `run_control/LAST_QUEUE` from `latest.pt`). Works for
+  queues that use `scripts/lib_train.sh` (`pretrain_10b_queue.sh`). If it says no training is running, an eval phase is on; wait or kill it.
+- **After a PC crash:** nothing restarts by itself. The 10B queue records the crash in `checkpoints/pretrain/l100_10b/CRASHES.md` and
+  refuses to start until relaunched with `ACK_CRASH=1 bash scripts/resume_train.sh` (the user's call).
+- Resume test: `bash scripts/test_resume.sh` (SIGKILL + `--resume auto`; bit-identical in `--deterministic` fp32 eager).
 
 ## Known state (2026-10-25)
 - Production size "big": d_model 512, 8 layers, 8 heads, d_ff 2048, seq 256, vocab 16k, **41.9M params**.
@@ -71,6 +78,15 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
+
+**Resume point (2026-10-31):** the three tasks are done: factuality eval (10-30), fact-first ft_v2 data (10-30, mood rule + plain maths;
+**not trained yet**), and the **10B pretrain plan, now with code and tests: `COSF-MI/experiments/plans/pretrain_10b.md`, waiting for the
+user's approval** (≈25.8 GPU-h in two stages with a 5B gate, peak ~54 GB disk). New in `train_overnight.py`: hourly full-state saves with RNG,
+`--init-from`, WSD schedule, `--resume-state`, `--val-corpus`, `--deterministic`, pause flag. Resume after SIGKILL is bit-identical
+(`scripts/test_resume.sh`); pause/resume for gaming tested (`scripts/pause_train.sh`, `scripts/resume_train.sh`). l100 at the 450 W cap:
+~94k tok/s (no slowdown). ⏳ **Sysmem Fallback is still allowing fallback** after the driver reinstall: eager l100 at batch 32 peaked at
+34.7 GiB on the 32 GiB card and ran ~25× slow instead of raising OOM. Check NVIDIA Control Panel → Manage 3D settings → *CUDA - Sysmem
+Fallback Policy* → *Prefer No Sysmem Fallback* (and whether it applies to WSL processes).
 
 **Resume point (2026-10-30 21:30):** factuality eval built (`COSF-MI/experiments/factuality/`, `factuality_{gen,grade}.py`; results +
 grader validation in `experiments/results/factuality/notes.md`): base 0.063, ft_l100 ~0.145; 104M knows almost none of the facts.

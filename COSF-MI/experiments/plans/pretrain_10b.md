@@ -1,128 +1,124 @@
-# Plan: extend the l100 pretrain to ~10B tokens (PLANNED 2026-10-30, NOT RUN)
+# Plan: extend the l100 pretrain to 10B tokens (updated 2026-10-31; code ready and tested, NOT RUN, waits for approval)
 
 Question: does knowledge, measured by the factuality eval (`experiments/factuality/`), climb with more pretraining at
-104M, or is 104M the ceiling? The eval points are 2.2B (have it), 5B and 10B, each one annealed so they compare fairly.
+104M, or is 104M the ceiling? Eval points: **2.2B** (the existing base, re-scored in every eval run so comparisons are paired),
+**5B** and **10B**, each one annealed so they compare fairly.
 
 ## Starting point
 
 - `checkpoints/pretrain/l100_on_s1/best_model.pt`: 104M, heartbeat on, 2.2B tokens of `data/corpus_v1/tok24k_v2`, warmup 2000 then
-  cosine to **0** (fully annealed), val 2.8769, 94k tok/s, 6.5 h.
-- Chinchilla-optimal for 104M is about 2B tokens, so 10B is about 5× past it. Loss still falls there, but slowly. The risk is that facts
-  stay flat while loss improves on style; that's what the 5B gate below is for.
+  cosine to 0, v1 val 2.8769. Factuality (joined, sampled_rep, 3 seeds) **0.063**.
+- Chinchilla-optimal for 104M is about 2B tokens, so 10B is about 5× past it. Loss will still fall, but slowly. The risk is that facts
+  stay flat while loss improves on style; the 5B gate is there for that.
 
-## Recommendation: continue, don't restart
+## Design: continue from 2.2B with a WSD schedule (unchanged from the 10-30 plan)
 
-Load the 2.2B weights with a **fresh optimizer**, re-warm to a lower peak, and use a warmup-stable-decay (WSD) schedule. Then:
+Load the 2.2B weights with a fresh optimizer (`--init-from`), warm up again to a lower peak, then hold the LR constant and decay it at the end
+(WSD: warmup-stable-decay). The 5B point is a short decay *branch* off the stable phase; the 10B point is the main run's own decay.
+This saves ~7 GPU-h over restarting from scratch, at the price of a small schedule confound: the 2.2B point used a cosine decay, the 5B/10B points WSD.
 
-- the existing checkpoint is the 2.2B point;
-- the 5B point is a short decay *branch* off the stable phase;
-- the 10B point is the main run's own decay.
+- Peak LR 3e-4 (half the original 6e-4), linear warmup 2,000 steps, then constant. Main decay: linear to 0 over the last 10% of the
+  run (~47.6k steps, 0.78B tokens). Batch 32 × seq 512 = 16,384 tokens/step. Heartbeat on (live), sleep off, seed 1.
+- **5B branch:** the main run stops at step **140,380** (2.3B new tokens, 4.5B total) and keeps that full state (`stable_step140380.pt`).
+  The branch resumes it and decays linearly to 0 over **30,517 steps (0.5B tokens)**, so it ends at exactly **5.0B total**. The main run
+  never sees the branch.
+- Loss and forgetting are scored on the **v1 val split** (`--val-corpus data/corpus_v1/tok24k_v2`, 10.96M tokens) at every point.
 
-| | continue from 2.2B (recommended) | restart from scratch to 10B, WSD |
+## Corpus extension: same three sources, new shards only, no new licences
+
+The extension trains only on shards the 2.2B run never opened (v1 used shards FWE 000-001, Cosmopedia 00000-00002, FineMath 00000-00001).
+Shard counts below come from v1's measured yield: FineWeb-Edu 0.375B tokens per parquet GB, Cosmopedia 0.244, FineMath 0.609.
+
+| source | licence (as v1) | extension tokens | shards (`scripts/corpus/download_ext.sh`) | raw |
+|---|---|---|---|---|
+| FineWeb-Edu `sample/10BT` | ODC-By 1.0 (collection; CommonCrawl text keeps its authors' rights) | 4.36B (55%) | 002-008 (7 × 2.0 GB) | 14.3 GB |
+| Cosmopedia v2 (`smollm-corpus`) | ODC-By 1.0; text by Mixtral-8x7B-Instruct (Apache-2.0) | 2.38B (30%) | 00003-00012 (10 × 1.2 GB) | 11.8 GB |
+| FineMath-4+ | ODC-By 1.0 (collection; CommonCrawl text) | 0.79B (10%) | 00002-00007 (6 × 0.3 GB) | 1.7 GB |
+| aura_arith (programmatic) | ours | 0.28B (3.5%) | `build_arith_plain.py --n 6550000 --seed 2` | 1.3 GB jsonl |
+| aura_distill | Apache-2.0 teacher outputs | **0, left out** (v1 already has it; keeps fine-tune data unseen) | | |
+
+Each source has about one shard of slack. The builder stops at each budget and logs `SOURCE RAN OUT` if a source runs short.
+Not added: Wikipedia (CC BY-SA, share-alike), TinyStories (GPT-generated), anything with GPT/Claude/Gemini outputs. A mix shift toward
+Cosmopedia would probably help factuality, but it would confound "more tokens" with "different data": that's a separate experiment.
+
+## Crash safety, pausing, power (new; all tested 2026-10-31)
+
+- **Checkpoint every hour**: `--save-every-minutes 60` writes the full state to `latest.pt`: weights, optimizer, scheduler, data position
+  (epoch + batch; the data order is a fixed permutation per epoch) and **RNG states** (torch CPU, CUDA, Python). The write goes to a temp
+  file, is fsynced and then renamed, and the previous state is kept as `latest.prev.pt`. A crash loses at most ~1 h of training.
+  The full state is also saved at every stop.
+- **Resume test** (`scripts/test_resume.sh`, l100 from the 2.2B checkpoint, WSD, SIGKILL at step 70, resumed from the step-50 save):
+  - eager fp32 with `--deterministic`: final weights, optimizer state and all 12 logged losses **bit-identical** to the straight run;
+  - compiled bf16 at batch 32 (the real config): the resumed run tracks the straight one within 4e-4 loss, the run-to-run noise.
+  Bitwise identity needs deterministic kernels: plain eager runs differ by ~1e-6 run to run (atomic adds in the embedding backward;
+  bf16 flash attention backward).
+- **No automatic restart, ever.** The queue writes `QUEUE_RUNNING` at start and removes it on any normal exit or failure. A PC crash
+  (BSOD, power loss) leaves it behind. The next launch then appends what it knows to `checkpoints/pretrain/l100_10b/CRASHES.md` and
+  **refuses to start** until it's relaunched with `ACK_CRASH=1` (the user's call). Tested with a simulated marker.
+- **450 W check**: the queue and `scripts/resume_train.sh` both stop with exit 3 if `nvidia-smi` doesn't report a 450 W limit. Tested with
+  a fake `nvidia-smi` reporting 575 W.
+- **Pause for gaming**: `bash scripts/pause_train.sh` saves the full state and exits in ~10 s, without starting the queue's next stage.
+  `bash scripts/resume_train.sh` checks the cap and relaunches. Tested: paused at step 220 (11 s, GPU back to 400 MiB), resumed at
+  step 220 with RNG restored, finished, and only then ran the next stage. Each resume costs ~1-2 min of compile warmup.
+- Stops on the first failure and never retries; a CUDA error is labelled as such.
+- Measured at the 450 W cap: **~94k tok/s** (same as the uncapped night pretrain), 17.4 GiB peak.
+
+## Time (at 94k tok/s)
+
+| step | time | GPU |
 |---|---|---|
-| new tokens trained | 7.8B + 0.5B (5B branch) = **8.3B** | 10B + 0.2B + 0.5B (2B and 5B branches) = 10.7B |
-| GPU time at 94k tok/s | **24.5 h** | 31.6 h |
-| comparability | the 2.2B point is cosine-annealed, while 5B/10B are WSD; small schedule confound | all three points use one schedule |
-| risk | loss bump after re-warming (recovers within a few hundred M tokens, see continual-pretraining work on re-warming) | none new |
+| download ~28 GB of shards | 10-30 min (bandwidth) | no |
+| arithmetic data (6.55M problems) + tokenize 7.8B tokens | ~3 + ~15 min | no |
+| **Stage 1 (`STAGE=to5b`)**: main run to step 140,380 (2.3B tokens) | **6.8 h** | yes |
+| 5B branch (0.5B tokens) + its val | 1.5 h | yes |
+| 5B evals: factuality (2.2B base + 5B, both encodings, greedy + 3 sampled seeds, Qwen2.5-7B grader), battery, gate | ~30 min | yes |
+| **Stage 1 total** | **≈ 8.8 h**, then it stops for the gate decision | |
+| **Stage 2 (`STAGE=to10b`)**: main run from 4.5B to 10B (5.5B tokens, decay included) + v1 val | **16.3 h** | yes |
+| 10B evals (2.2B, 5B, 10B) + compare 10B vs 5B | ~40 min | yes |
+| **Total GPU** | **≈ 25.8 h** (+ ~2 min per pause/resume) | |
 
-The 7 h saved is worth the small confound. If the 5B-vs-2.2B difference is borderline, the from-scratch run is the clean tiebreak.
+Stage 2 can run continuously (~17 h) or in pieces: pause any time, and the hourly saves cap a crash's loss at ~1 h.
 
-### Schedule (continue)
-
-- Peak LR 3e-4 (half the original 6e-4: same distribution, already-trained weights), linear warmup over 2,000 steps, then constant.
-- Main decay: linear to 0 over the last 10% of the run (from about 9.2B to 10B total tokens).
-- 5B branch: from the stable checkpoint saved at 5.0B total tokens, decay linearly to 0 over 0.5B tokens (about 30.5k steps, 1.5 h) into
-  a separate dir. The main run never sees the branch.
-- Batch 32 × seq 512 = 16,384 tok/step. 7.8B / 16,384 ≈ **476k steps**. Same flags as the night pretrain otherwise: `--heartbeat live
-  --no-sleep --seed 1 --log-every 200 --save-every 3000 --resume auto`.
-
-## Corpus expansion: same three sources, new shards, no new licences
-
-The extension trains only on documents the 2.2B run never saw. The builder reads shards in sorted order until each budget is met, so
-starting the download one shard past v1's last shard guarantees no overlap. Per source, the shares match v1.
-
-| source | licence (unchanged from v1) | in v1 | extension budget | shards to fetch | raw size |
-|---|---|---|---|---|---|
-| FineWeb-Edu `sample/10BT` | ODC-By 1.0 (collection; CommonCrawl web text keeps its authors' rights) | 1.21B, shards 000-001 | 4.3B | 002-008 (7 of the 12 left) | ~15 GB |
-| Cosmopedia v2 (`smollm-corpus`) | ODC-By 1.0; text by Mixtral-8x7B-Instruct (Apache-2.0) | 0.66B, shards 00000-00002 | 2.35B | 00003-00013 (11 of 104) | ~13 GB |
-| FineMath-4+ | ODC-By 1.0 (collection; CommonCrawl web text) | 0.22B, shards 00000-00001 | 0.8B | 00002-00009 (8 of 64) | ~2.3 GB |
-| aura_arith (programmatic) | ours | 77M | 0.27B (3.5%) | new `build_arith_plain.py --seed 2`, held-out policy as v1 | <1 GB |
-| aura_distill (ft_v1/ft_v2) | Apache-2.0 teacher outputs | 32M | **0, left out** | | |
-
-- Shard counts come from v1's tokens per GB. Fetch one extra shard per source as slack, and check the budget after tokenizing.
-- **Leave the distill set out.** v1 already contains the ft_v1 train split, which confounds every fine-tune comparison. Keeping it out of the
-  extension means the fine-tune data is not trained on again before the fine-tune.
-- **Shift to Cosmopedia? Not in this run.** It's the most "explain"-like source, so shifting the mix toward it would probably help the factuality
-  eval, but it would confound "more tokens" with "different data". Keep the v1 shares here. A mix change is a separate experiment.
-- **Not added (licence flags for Nodal Systems):**
-  - Wikipedia / Simple English Wikipedia: CC BY-SA 4.0, share-alike. Its status for trained weights is unsettled, so I'd keep it out of a
-    commercial base.
-  - TinyStories: GPT-generated (OpenAI terms) and CDLA-Sharing.
-  - Anything with GPT/Claude/Gemini outputs.
-- New corpus dir `data/corpus_v2/tok24k_ext` (train.bin + val.bin + meta.json), tokenized with `models/tokenizer_clean24k.model`.
-  Forgetting and loss are tracked on **v1 val** (`data/corpus_v1/tok24k_v2/val.bin`) so every point is scored on the same text. The new
-  val split is a second check.
-
-## Disk
-
-The WSL vdisk lives on C:, which had 186 GB free (81% used) on 2026-10-30.
+## Disk (C: has 199 GB free on 2026-10-31; WSL vdisk lives on C:)
 
 | item | size |
 |---|---|
-| raw parquet (FWE 15 + Cosmo 13 + FineMath 2.3 + slack) | ~33 GB, deletable after tokenizing (keep the shard list in meta.json) |
-| tokens, uint16 (8B × 2 bytes) | ~16 GB |
-| checkpoints: run dir (best/latest) + 5B stable + 5B branch + 10B | 5-6 × 1.25 GB ≈ 7.5 GB |
-| **peak** | **~57 GB** (C: to ~87%) |
+| raw parquet (`data/corpus_v2/raw`) | ~28 GB, deletable after tokenizing (the shard list is kept in meta.json) |
+| arithmetic jsonl (`data/arith_corpus_v2`) | ~1.3 GB |
+| tokens (`data/corpus_v2/tok24k_ext`, uint16) | ~15.6 GB |
+| main run dir: latest + latest.prev + stable_step140380 + best_model + checkpoint_epoch_1 | 5 × 1.25 = 6.3 GB |
+| branch dir: latest + latest.prev + final_model (weights only) | 2.9 GB |
+| **peak** | **~54 GB** (C: down to ~145 GB free); ~26 GB after deleting the raw shards |
 
-If C: gets tight, move the distro to D: (1.6 TB free) first: `wsl --manage Ubuntu-24.04 --move D:\WSL`. Don't do this mid-run.
+## Evaluation points and gate
 
-## Time
-
-| step | time |
-|---|---|
-| download ~33 GB from the Hub | ~10-30 min (bandwidth-dependent) |
-| tokenize 8B tokens (v1 did 2.1B in 3.4 min, all cores) | ~15 min |
-| smoke test (`--max-steps 300`, check the resumed loss starts near 2.88 and the warmup bump is bounded) | 5 min |
-| main run, 7.8B tokens | **23.0 h** |
-| 5B branch, 0.5B tokens | 1.5 h |
-| evals per point (val, factuality ×2 encodings + grading, corpus-format battery) | ~25 min |
-| **total GPU** | **~25.5 h** |
-
-**Pre-flight: cap GPU power at 450 W** (admin PowerShell: `nvidia-smi -pl 450`; check with `nvidia-smi -q -d POWER`; resets on reboot,
-so re-apply each night). The ft_v2 rewrite on 2026-10-30 sat at 575/575 W and 79 °C for over an hour. A ~78% cap usually costs only
-5-10% speed and lowers both the 12V-2x6 connector load and the BSOD exposure. If it costs more than 10% on training, re-time the plan.
-
-Run it as ~8 h nightly segments with `--resume auto`, three nights plus the branch. That also limits the damage from another 0x133 BSOD,
-since the driver is still 617.42 and the clean reinstall hasn't been done. Same rule as the night queue: stop on the first CUDA error,
-no retries.
-
-## Evaluation points
-
-Scored at 2.2B (existing), 5B (branch) and 10B (final), all annealed:
-
-1. v1 val loss (the same 10.96M tokens).
-2. **Factuality eval**: base model, `joined` encoding (base models prefer it), greedy + 3 sampled_rep seeds, Qwen2.5-7B grader. This
-   is the headline number.
+At 2.2B (existing), 5B (branch) and 10B (final), all annealed and re-scored in the same run:
+1. v1 val loss (same 10.96M tokens).
+2. **Factuality eval** (headline): joined encoding, greedy + 3 sampled_rep seeds, Qwen2.5-7B grader (validated 38/40 against my hand checks).
 3. Corpus-format arithmetic battery (`base_arith_eval.py --max-new 160`).
-4. Optional, +45 min per point: the ft_v2 fine-tune on the 5B and 10B bases, then the factuality eval again, to see whether the
-   knowledge survives into the voice.
 
-Cheap trend probes (not annealed, so biased; trend only): every 1B tokens of the stable phase, v1 val loss and factuality greedy-joined only.
+**Gate at 5B** (`experiments/factuality_compare.py`, paired bootstrap over the 100 questions, 10k draws): continue to 10B only if 5B
+beats 2.2B by **≥ +0.05** and the 95% CI's lower bound is above 0. Otherwise stop at 5B: 104M is then capacity-bound on facts, and the next spend should be a bigger model.
+Stage 1 ends after the gate either way, and stage 2 starts only on the user's go-ahead.
+Optional, +45 min per point: the ft_v2 fine-tune on each base, then factuality again.
 
-**Decision gate at 5B.** The 2.2B base scores **0.063** (joined, sampled_rep, 3 seeds; `experiments/results/factuality/notes.md`),
-which is near the floor. Its 3 seeds run 0.045-0.085.
+## Commands (after approval)
 
-- **Continue to 10B only if** the 5B branch beats 2.2B by at least **+0.05**, with a paired bootstrap over the 100 questions whose
-  95% CI excludes 0. Run the same check after the ft_v2 fine-tune on both bases, since the fine-tuned score is less floor-bound.
-- Otherwise stop at 5B. 104M is then capacity-bound on facts, and the next spend should be a bigger model, not more tokens.
+```
+bash scripts/corpus/download_ext.sh
+.venv/bin/python scripts/distill/build_arith_plain.py --n 6550000 --seed 2 --out data/arith_corpus_v2
+.venv/bin/python scripts/corpus/build_corpus.py tokenize --tokenizer models/tokenizer_clean24k.model --tokens 7.92e9 \
+  --name tok24k_ext --raw data/corpus_v2/raw --root data/corpus_v2 --shares aura_distill:0 --arith-jsonl data/arith_corpus_v2/train.jsonl
+nvidia-smi --query-gpu=power.limit --format=csv,noheader     # must print 450.00 W
+TRAIN_CMD="env STAGE=to5b bash scripts/pretrain_10b_queue.sh" ~/.claude/skills/ml-training/scripts/launch_train.sh configs/smoke.yaml
+```
+(`--tokens 7.92e9` × the shares' sum 0.985 = 7.8B.)
 
-## Code changes needed before running (none made yet)
+## Code (done 2026-10-31)
 
-1. `train_overnight.py --init-from CKPT`: load model weights only, with a fresh optimizer and schedule. Today `--resume PATH` also loads
-   the optimizer and fast-forwards a cosine.
-2. `--schedule wsd --decay-frac 0.1` (and `--decay-tokens` for branches): warmup, constant, then linear to 0. The cosine stays the default.
-3. `--save-at-tokens 5e9`: keep a stable-phase checkpoint at a token count, besides `latest.pt`.
-4. `build_corpus.py`: a `--raw` dir and a per-source shard list, so the extension reads only the new shards; plus a `download`
-   subcommand that writes the shard list and licences into meta.json.
-5. A queue script (`scripts/pretrain_10b_queue.sh`) in the style of `pretrain_queue.sh`: the main run, then the 5B branch, then the
-   eval at each point. It stops on the first failure.
+- `train_overnight.py`: `--init-from`, `--schedule wsd --decay-frac --decay-start-step`, `--resume-state FILE`, `--save-every-minutes`,
+  `--save-at-steps`, `--val-corpus`, `--deterministic`; RNG states in `latest.pt`; atomic save with `latest.prev.pt`; full-state save at
+  every stop; pause flag (`run_control/PAUSE` → save, exit 75).
+- `scripts/pretrain_10b_queue.sh` (two stages, crash marker, cap check), `scripts/lib_train.sh` (pause-aware `run_train`),
+  `scripts/pause_train.sh`, `scripts/resume_train.sh`, `scripts/corpus/download_ext.sh`, `build_corpus.py --raw --root --shares
+  --arith-jsonl`, `experiments/factuality_compare.py`; tests `scripts/test_resume.sh`, `scripts/test_pause_queue.sh`.

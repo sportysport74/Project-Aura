@@ -53,7 +53,7 @@ _INST = re.compile(r"\[INST\]\s*(.*?)\s*\[/INST\]\s*(.*)", re.S)
 
 
 def documents(name):
-    """Yield the source's documents as plain text, in a fixed order."""
+    """Yield the source's documents as plain text, in a fixed order (shards sorted by name under RAW)."""
     src = SOURCES[name]
     if "jsonl" in src:
         for line in open(ROOT / src["jsonl"], encoding="utf-8"):
@@ -110,7 +110,14 @@ def cmd_tokenize(args):
     import sentencepiece as spm
     sp = spm.SentencePieceProcessor(model_file=str(ROOT / args.tokenizer))
     assert sp.vocab_size() < 65536, "uint16 storage needs a vocab under 65,536"
-    out = ROOT / "data/corpus_v1" / args.name
+    global RAW
+    RAW = ROOT / args.raw
+    for kv in filter(None, args.shares.split(",")):  # e.g. "aura_distill:0,aura_arith:0.035"
+        k, v = kv.split(":")
+        SOURCES[k]["share"] = float(v)
+    if args.arith_jsonl:
+        SOURCES["aura_arith"]["jsonl"] = args.arith_jsonl
+    out = ROOT / args.root / args.name
     out.mkdir(parents=True, exist_ok=True)
     counts = {n: {"train_tokens": 0, "val_tokens": 0, "docs": 0} for n in SOURCES}
     t0 = time.time()
@@ -118,6 +125,8 @@ def cmd_tokenize(args):
             mp.Pool(args.workers, initializer=_init, initargs=(str(ROOT / args.tokenizer),)) as pool:
         for name, src in SOURCES.items():
             budget = src["share"] * args.tokens
+            if not budget:
+                continue
             batch, batches = [], []
 
             def flush(batch):
@@ -145,7 +154,8 @@ def cmd_tokenize(args):
             print(f"{name}: {c['train_tokens'] / 1e6:.0f}M train + {c['val_tokens'] / 1e6:.1f}M val tokens, {c['docs']:,} docs "
                   f"(budget {budget / 1e6:.0f}M){'' if c['train_tokens'] >= budget else '  <- SOURCE RAN OUT'} "
                   f"[{time.time() - t0:.0f} s]", flush=True)
-    meta = {"tokenizer": args.tokenizer, "vocab_size": sp.vocab_size(), "eos_id": sp.eos_id(), "dtype": "uint16",
+    shards = {n: sorted(str(q.relative_to(RAW)) for q in RAW.glob(s["glob"])) for n, s in SOURCES.items() if "glob" in s}
+    meta = {"tokenizer": args.tokenizer, "raw": args.raw, "raw_shards": shards, "vocab_size": sp.vocab_size(), "eos_id": sp.eos_id(), "dtype": "uint16",
             "train_tokens": sum(c["train_tokens"] for c in counts.values()),
             "val_tokens": sum(c["val_tokens"] for c in counts.values()),
             "sources": {n: dict(counts[n], share=s["share"], licence=s["licence"], repo=s["repo"]) for n, s in SOURCES.items()},
@@ -182,6 +192,10 @@ def main():
     t.add_argument("--tokens", type=float, default=2.2e9)
     t.add_argument("--name", required=True)
     t.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 4))
+    t.add_argument("--raw", default="data/corpus_v1/raw", help="parquet shards, one folder per source")
+    t.add_argument("--root", default="data/corpus_v1", help="output parent dir (the corpus goes to <root>/<name>)")
+    t.add_argument("--shares", default="", help='override shares, e.g. "aura_distill:0" (0 = leave the source out)')
+    t.add_argument("--arith-jsonl", default=None, help="aura_arith source file instead of data/arith_corpus_v1/train.jsonl")
     args = p.parse_args()
     random.seed(0)
     {"sample": cmd_sample, "tokenize": cmd_tokenize}[args.cmd](args)

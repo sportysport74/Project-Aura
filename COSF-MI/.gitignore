@@ -78,3 +78,4 @@ Thumbs.db
 *.tmp
 .env
 .env.local
+run_control/

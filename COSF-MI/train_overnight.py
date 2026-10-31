@@ -25,6 +25,7 @@ Usage:
 import argparse
 import json
 import os
+import random
 import sys
 import time
 import torch
@@ -40,6 +41,9 @@ from cosf_mi.data.tokenizer import BPETokenizer
 from cosf_mi.data.token_dataset_fast import create_datasets_fast
 from cosf_mi.data.memmap_dataset import load_corpus
 from cosf_mi.training.sleep_cycle import SleepCycleHook
+
+PAUSE_FLAG = Path(__file__).parent / "run_control" / "PAUSE"  # created by scripts/pause_train.sh
+PAUSE_EXIT = 75  # exit code for "paused on request" (EX_TEMPFAIL); queues treat it as a clean stop
 
 
 def train_with_gentle_sleep(
@@ -64,14 +68,19 @@ def train_with_gentle_sleep(
     eval_batches=0,
     save_final=False,
     sleep=True,
+    save_every_minutes=0.0,
+    save_at_steps=(),
 ):
     """Train model with gentle sleep cycles.
 
     Every `save_every` steps the full state goes to latest.pt, so a crash
     (e.g. a Windows display reset killing the CUDA context) loses minutes, not
     hours. Each epoch's data order is fixed by its seed, so a resume can skip
-    exactly the batches already done.
+    exactly the batches already done. save_every_minutes adds a time-based save
+    (whichever comes first), and save_at_steps keeps extra full-state snapshots
+    (state_step<N>.pt) to branch from.
     """
+    last_save = time.time()
 
     model.train()
     current_epoch = 0
@@ -157,6 +166,8 @@ def train_with_gentle_sleep(
                 if save_final:
                     torch.save({"config": model.config, "model_state_dict": model.state_dict(), "step": global_step,
                                 "val_loss": val_loss}, Path(checkpoint_dir) / "final_model.pt")
+                # full state at the stop too, so a run stopped with --max-steps can be continued or branched exactly
+                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir)
                 return
 
             # Progress bar and sleep check every 10 steps: reading the loss is a GPU sync
@@ -175,9 +186,22 @@ def train_with_gentle_sleep(
                     # We just need to configure the decay rate
                     pass
 
-            if global_step % save_every == 0:
+            if global_step % save_every == 0 or (save_every_minutes and time.time() - last_save >= 60 * save_every_minutes):
+                t_save = time.time()
                 save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step,
                             best_val_loss, checkpoint_dir)
+                last_save = time.time()
+                print(f"saved latest.pt at step {global_step} ({last_save - t_save:.1f} s)", flush=True)
+            # Pause request (scripts/pause_train.sh): save the full state and exit with code 75; the queue stops cleanly
+            if global_step % 20 == 0 and PAUSE_FLAG.exists():
+                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir)
+                print(f"PAUSED at step {global_step}: latest.pt saved in {checkpoint_dir}; resume with scripts/resume_train.sh",
+                      flush=True)
+                sys.exit(PAUSE_EXIT)
+            if global_step in save_at_steps:
+                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step,
+                            best_val_loss, checkpoint_dir, name=f"state_step{global_step}.pt")
+                print(f"saved state_step{global_step}.pt", flush=True)
 
         # Restore original sleep settings after first epoch
         if epoch == 0:
@@ -249,8 +273,11 @@ def train_with_gentle_sleep(
     sleep_hook.print_summary()
 
 
-def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step, best_val_loss, checkpoint_dir):
-    """Full training state for crash recovery (written atomically)."""
+def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step, best_val_loss, checkpoint_dir,
+                name="latest.pt"):
+    """Full training state for crash recovery: weights, optimizer, scheduler, data position and RNG states.
+    Written to a temp file and renamed (atomic), and the previous latest.pt is kept as latest.prev.pt, so a crash
+    during a save, or a bad file, still leaves a state to resume from."""
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     state = {
@@ -262,10 +289,18 @@ def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step,
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
         'config': model.config,
+        'rng': {'torch': torch.get_rng_state(), 'python': random.getstate(),
+                'cuda': torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
+        'saved_at': time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    tmp = checkpoint_dir / "latest.pt.tmp"
+    tmp = checkpoint_dir / f"{name}.tmp"
     torch.save(state, tmp)
-    os.replace(tmp, checkpoint_dir / "latest.pt")
+    fd = os.open(tmp, os.O_RDONLY)
+    os.fsync(fd)  # on disk before the rename, so a power loss can't leave a renamed but empty file
+    os.close(fd)
+    if name == "latest.pt" and (checkpoint_dir / name).exists():
+        os.replace(checkpoint_dir / name, checkpoint_dir / "latest.prev.pt")
+    os.replace(tmp, checkpoint_dir / name)
 
 
 def evaluate(model, val_loader, device, amp_dtype=None, max_batches=0):
@@ -380,6 +415,25 @@ def main():
                         help='bf16 autocast for attention and lm_head; oscillators and losses stay fp32')
     parser.add_argument('--eval-batches', type=int, default=0,
                         help='With --max-steps: report val loss on the first N val batches at the end')
+    parser.add_argument('--deterministic', action='store_true',
+                        help='torch.use_deterministic_algorithms (slow; for bitwise tests such as scripts/test_resume.sh)')
+    parser.add_argument('--save-every-minutes', type=float, default=0,
+                        help='Also save latest.pt every N minutes of wall time (0 = off), whichever comes first')
+    parser.add_argument('--save-at-steps', type=str, default='',
+                        help='Comma-separated steps at which to keep a full-state snapshot state_step<N>.pt (to branch from)')
+    parser.add_argument('--resume-state', type=str, default=None,
+                        help='Resume the full training state (weights, optimizer, scheduler, data position, RNG) from this file '
+                             '(a latest.pt or state_step<N>.pt); --resume auto does the same with <checkpoint-dir>/latest.pt')
+    parser.add_argument('--init-from', type=str, default=None,
+                        help='Initialise the weights from this checkpoint (weights only: fresh optimizer and schedule). '
+                             'Ignored when a training state is resumed')
+    parser.add_argument('--schedule', type=str, default='cosine', choices=['cosine', 'wsd'],
+                        help='cosine (default) or wsd: linear warmup, constant, then linear decay to 0 at the end')
+    parser.add_argument('--decay-frac', type=float, default=0.1, help='wsd: decay over the last fraction of the steps')
+    parser.add_argument('--decay-start-step', type=int, default=0,
+                        help='wsd: start the decay at this step instead (e.g. a branch off a stable-phase snapshot)')
+    parser.add_argument('--val-corpus', type=str, default=None,
+                        help='Take the val split from this corpus dir instead of --corpus (same tokenizer required)')
     parser.add_argument('--decay-steps', type=int, default=0,
                         help='Cosine LR decay length in steps (0 = all epochs). Set it to --max-steps so a short run '
                              'finishes its schedule (scaling sweep)')
@@ -471,6 +525,12 @@ def main():
     print("  4. Warmup period (no sleep in epoch 1)")
     print()
 
+    if args.deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")  # needed by deterministic cuBLAS; before the first CUDA call
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        print("Deterministic algorithms ON")
+
     # Device
     device = args.device if torch.cuda.is_available() else 'cpu'
     print(f"Device: {device}")
@@ -531,6 +591,10 @@ def main():
     if args.corpus:
         # Pre-tokenized uint16 memmap corpus (scripts/corpus/tokenize_corpus.py): stays on disk, not in RAM
         train_dataset, val_dataset, _ = load_corpus(args.corpus, args.seq_len)
+        if args.val_corpus:
+            _, val_dataset, vmeta = load_corpus(args.val_corpus, args.seq_len)
+            assert vmeta["tokenizer"] == corpus_meta["tokenizer"], "--val-corpus must use the same tokenizer"
+            print(f"Val split from {args.val_corpus} ({vmeta['val_tokens']:,} tokens)")
     else:
         # Styled TinyStories data (the original pretraining mix)
         train_dataset, val_dataset = create_datasets_fast(
@@ -569,7 +633,16 @@ def main():
         lr=args.lr,
     )
     total_steps = args.decay_steps or len(train_loader) * args.epochs
-    if args.warmup:
+    if args.schedule == 'wsd':
+        decay_start = args.decay_start_step or int(total_steps * (1 - args.decay_frac))
+
+        def wsd(s):
+            if s < decay_start:
+                return min(1.0, (s + 1) / args.warmup) if args.warmup else 1.0
+            return max(0.0, 1 - (s - decay_start) / max(1, total_steps - decay_start))
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, wsd)
+        print(f"Schedule: WSD, warmup {args.warmup}, constant to step {decay_start:,}, linear to 0 at step {total_steps:,}")
+    elif args.warmup:
         # Linear warmup, then the same cosine decay
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda s: min(1.0, (s + 1) / args.warmup) * 0.5 * (
             1 + math.cos(math.pi * min(1.0, s / total_steps))))
@@ -583,16 +656,30 @@ def main():
     latest = Path(args.checkpoint_dir) / "latest.pt"
     if args.resume == 'auto' and not latest.exists():
         args.resume = None
-    if args.resume == 'auto':
-        print(f"Resuming from crash-recovery state: {latest}")
-        state = torch.load(latest, map_location=device, weights_only=False)
+    if args.resume == 'auto' and not args.resume_state:
+        args.resume_state = str(latest)
+    if args.init_from and not args.resume_state:
+        init = torch.load(args.init_from, map_location=device, weights_only=False)
+        model.load_state_dict(init['model_state_dict'])
+        print(f"Initialised weights from {args.init_from} (fresh optimizer and schedule)")
+    if args.resume_state:
+        print(f"Resuming full training state: {args.resume_state}")
+        state = torch.load(args.resume_state, map_location=device, weights_only=False)
         model.load_state_dict(state['model_state_dict'])
         optimizer.load_state_dict(state['optimizer_state_dict'])
         scheduler.load_state_dict(state['scheduler_state_dict'])
         start_epoch, skip_batches = state['epoch'], state['batch_in_epoch']
         global_step, best_val_loss = state['global_step'], state['best_val_loss']
+        rng = state.get('rng')
+        if rng:
+            # map_location moved the saved ByteTensors to the device; the setters need them on the CPU
+            torch.set_rng_state(rng['torch'].cpu())
+            random.setstate(rng['python'])
+            if rng['cuda'] is not None and torch.cuda.is_available():
+                torch.cuda.set_rng_state_all([t.cpu() for t in rng['cuda']])
         print(f"  epoch {start_epoch + 1}, batch {skip_batches}, step {global_step}, "
-              f"lr={optimizer.param_groups[0]['lr']:.2e}, best val_loss={best_val_loss:.4f}")
+              f"lr={optimizer.param_groups[0]['lr']:.2e}, best val_loss={best_val_loss:.4f}, "
+              f"RNG {'restored' if rng else 'not in file (older state)'}, saved {state.get('saved_at', '?')}")
         print()
     elif args.resume:
         print(f"Resuming from checkpoint: {args.resume}")
@@ -649,6 +736,8 @@ def main():
         eval_batches=args.eval_batches,
         save_final=args.save_final,
         sleep=args.sleep,
+        save_every_minutes=args.save_every_minutes,
+        save_at_steps={int(x) for x in args.save_at_steps.split(',') if x},
     )
 
     print()
