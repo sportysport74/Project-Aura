@@ -76,8 +76,11 @@ Linux/WSL migration checklist. **Read this first; tick items off (with date) as 
 grader validation in `experiments/results/factuality/notes.md`): base 0.063, ft_l100 ~0.145; 104M knows almost none of the facts.
 **ft_v2** built (`data/distill_pilot/ft_v2`, fact-first, `scripts/distill/build_factfirst.py`, report in `experiments/results/ft_v2_build/`),
 **not trained yet**: next is ft_v2 on the l100 base (2 seeds) + factuality/readable eval vs ft_v1. 10B extended-pretrain plan (NOT RUN, needs
-code changes + approval): `experiments/plans/pretrain_10b.md`. ⏳ Cap GPU power at 450 W (admin PowerShell `nvidia-smi -pl 450`) before
-long GPU jobs: the vLLM rewrite sat at 575/575 W.
+code changes + approval): `experiments/plans/pretrain_10b.md`. GPU power cap 450 W is now a standing rule (see Rules; done 2026-10-31).
+
+**2026-10-31:** NVIDIA driver clean-installed: **621.01 (CUDA 13.5 UMD)**, 450 W cap applied, Sysmem Fallback policy re-set, `nvidia-smi` works
+in WSL after `wsl --shutdown`. Torch sanity check passed on 621.01 (torch 2.14.1+cu132, sm_120): bf16 8192³ matmul 213 TFLOPS at the 450 W cap
+(rel. err 2.9e-3 vs fp32), SDPA flash bf16 fwd+bwd OK, `torch.compile` fwd+bwd OK (fp32 max diff vs eager 3e-7).
 
 **Resume point (2026-10-30 19:10):** branch `distill-investigation`, not pushed. Night queue done: full l100 pretrain
 `COSF-MI/checkpoints/pretrain/l100_on_s1` (val 2.8769). Seeds 4-6: n=6 control−on +0.068, but control is seed-sensitive and there is no batch
@@ -97,14 +100,15 @@ worktree `~/projects/aura-syncfix` removed). The control result is **corrected b
 **New goal: distillation.** The investigation is done (see "Distillation investigation" below); **the pilot plan waits for user approval.
 Don't start generation before that.**
 
-### Windows BSOD during the sweep (2026-10-29) ⏳
+### Windows BSOD during the sweep (2026-10-29) ✅ fix applied 2026-10-31
 - 01:49: bugcheck 0x133 DPC_WATCHDOG_VIOLATION (DPC_QUEUE_EXECUTION_TIMEOUT_EXCEEDED). Same as 10/26 06:49. `cdb !analyze -v` puts both in the
   NVIDIA driver's DPC path (10/26: `nvlddmkm`; 10/29: `dxgmms2!VidSchiUnwaitMonitoredFences` called from `nvlddmkm`'s DPC). Driver 617.42
   (32.0.16.1742, 2026-09-29). Wallpaper Engine (`wallpaper32`) was the active process in the 10/26 crash and is running now. Older dumps
   (0x13A heap 5/26 and 6/10, 0x3B opera 9/2) look unrelated. WinDbg installed via winget; analyses in `%LOCALAPPDATA%\Temp\dumpan\` (outside the repo).
 - The sweep lost only `l100_control_s2`. Relaunched as run `20261029-042725` at 04:27, finished 07:12 with no new crash.
-- ⏳ Mitigation: quit Wallpaper Engine during training, clean-install the NVIDIA driver, and/or turn HAGS off. At 20:40 on 10/29 the driver was
-  still 617.42 with files from 10/9 and no reboot since the crash, so a reinstall wasn't visible yet.
+- [x] Mitigation (2026-10-31, user): **driver clean-installed, 617.42 → 621.01**, GPU power capped at 450 W, Sysmem Fallback policy re-set.
+  Applied, not yet proven: both 0x133 crashes were hours apart, so only a long run without a BSOD counts as confirmation. If it recurs,
+  record the bugcheck and the driver version here. (Wallpaper Engine during training and HAGS weren't part of this fix.)
 
 ### Distillation investigation (2026-10-27; nothing changed, no generation run)
 **1. The old `aura_chat_distill` run.**
@@ -388,7 +392,7 @@ Done:
   loss 8.48 → 6.72, ~77k tok/s, ~106 ms/step, **5.24 GiB peak VRAM**.
 
 - [x] Docker GPU test (2026-10-26): `docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi` sees the
-  RTX 5090 (32607 MiB, driver 617.42). Docker Desktop doesn't autostart after a reboot; while it's down, `docker` is missing
+  RTX 5090 (32607 MiB, driver 617.42 at the time; 621.01 since 2026-10-31). Docker Desktop doesn't autostart after a reboot; while it's down, `docker` is missing
   in WSL (it's a symlink into `/mnt/wsl/docker-desktop`). Start it from Windows first.
 
 - [x] Second opinion via Ollama (2026-10-26): **Ollama now runs inside WSL** (0.40.11, systemd service `ollama`,
@@ -491,6 +495,9 @@ Open:
   `experiments/results/` or other committed output. Eval scripts write paths through `ab_eval.rel()`. Check before committing:
   `git grep -n /home/ -- COSF-MI/experiments/results` must print nothing.
 - One GPU: don't run the 32b teacher and training at the same time.
+- **GPU power cap 450 W for every long run** (user rule, 2026-10-31). The cap (`nvidia-smi -pl 450`, admin PowerShell on Windows) **resets on
+  reboot**, so check it before any long run: `nvidia-smi --query-gpu=power.limit --format=csv,noheader` must print `450.00 W`.
+  **If it doesn't, stop and ask the user; don't launch** (and don't try to set it from WSL).
 - **Compiled runs aren't bit-reproducible** (`--compile` is the default): the same seed and config diverge after ~100-200 steps.
   Eager runs with the same seed are bit-identical. Published or compared results must use `--no-compile`, or report
   several seeds (mean ± spread), never a single compiled run.
