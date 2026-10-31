@@ -79,6 +79,14 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**10B pretrain, stage 1 (2026-10-31):** approved and launched 06:11 (run `runs/20261031-061128`) on `data/corpus_v2/tok24k_ext` (7.80B
+tokens; raw shards 27.6 GB in `data/corpus_v2/raw`, deletable). At the 450 W cap the card is power-bound: **~86k tok/s** (not 94k),
+so stage 1 ≈ 9.6 h, stage 2 ≈ 17.8 h. **12:40:07: GPU driver error** (Windows nvlddmkm Event 153, "Error occurred on GPUID 2e00",
+driver 621.01): the GPU went idle and the trainer hung at step 120,179 (CUDA context dead, main thread spinning). Found at 14:15 via a pause
+request, killed 16:07, not retried; details in `checkpoints/pretrain/l100_10b/CRASHES.md`. Resumed from latest.pt (step 111,979) on the
+user's go-ahead. **New: stall watchdog** in `scripts/lib_train.sh` (no log progress for 15 min → kill the trainer, STOP, no retry; tested).
+A driver error 153 under the new driver means the 10-29 BSOD fix isn't a full fix: the GPU still faults under long load.
+
 **Resume point (2026-10-31):** the three tasks are done: factuality eval (10-30), fact-first ft_v2 data (10-30, mood rule + plain maths;
 **not trained yet**), and the **10B pretrain plan, now with code and tests: `COSF-MI/experiments/plans/pretrain_10b.md`, waiting for the
 user's approval** (≈25.8 GPU-h in two stages with a 5B gate, peak ~54 GB disk). New in `train_overnight.py`: hourly full-state saves with RNG,
