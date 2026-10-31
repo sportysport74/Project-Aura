@@ -102,17 +102,20 @@ def rate_prompts(chat_val_lines, pilot_by_cat):
 
 @torch.no_grad()
 def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40, seed=0, bs=64, top_p=None,
-             rep_penalty=1.0):
+             rep_penalty=1.0, joined=False):
     """[(reply, ended)] per prompt; ended = the model wrote "You:" (its turn is over) before the cap.
     Sampling: temperature, then top_k (0 = off), then top_p (None = off). rep_penalty > 1 is the CTRL/HF-style penalty on
     every token already in the context (prompt + reply so far): positive logits divided by it, negative ones multiplied.
-    The defaults (top-k 40, no top-p, no penalty) are what the A/B report used."""
+    The defaults (top-k 40, no top-p, no penalty) are what the A/B report used. The prompt is encoded piece by piece, as
+    finetune_chat.py builds training lines; joined=True encodes "You: {p}\nAura:" in one go, as the pretraining corpus
+    wrote its chat-format slot (base models prefer it; see experiments/results/ft_l100/notes.md)."""
     dev = next(model.parameters()).device
     user_ids, aura_ids = tok.encode(ft.USER), tok.encode(ft.AURA)
     k = len(user_ids)
     out = []
     for s in range(0, len(prompts), bs):
-        ctx = [(user_ids + tok.encode(p) + aura_ids)[-(SEQ - 8):] for p in prompts[s:s + bs]]
+        ctx = [(tok.encode(f"{ft.USER} {p}\n{ft.AURA}") if joined else user_ids + tok.encode(p) + aura_ids)[-(SEQ - 8):]
+               for p in prompts[s:s + bs]]
         B = len(ctx)
         buf = torch.zeros(B, SEQ, dtype=torch.long, device=dev)
         for i, c in enumerate(ctx):

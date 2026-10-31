@@ -72,6 +72,13 @@ is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**Resume point (2026-10-30 21:30):** factuality eval built (`COSF-MI/experiments/factuality/`, `factuality_{gen,grade}.py`; results +
+grader validation in `experiments/results/factuality/notes.md`): base 0.063, ft_l100 ~0.145; 104M knows almost none of the facts.
+**ft_v2** built (`data/distill_pilot/ft_v2`, fact-first, `scripts/distill/build_factfirst.py`, report in `experiments/results/ft_v2_build/`),
+**not trained yet**: next is ft_v2 on the l100 base (2 seeds) + factuality/readable eval vs ft_v1. 10B extended-pretrain plan (NOT RUN, needs
+code changes + approval): `experiments/plans/pretrain_10b.md`. ⏳ Cap GPU power at 450 W (admin PowerShell `nvidia-smi -pl 450`) before
+long GPU jobs: the vLLM rewrite sat at 575/575 W.
+
 **Resume point (2026-10-30 19:10):** branch `distill-investigation`, not pushed. Night queue done: full l100 pretrain
 `COSF-MI/checkpoints/pretrain/l100_on_s1` (val 2.8769). Seeds 4-6: n=6 control−on +0.068, but control is seed-sensitive and there is no batch
 effect (`experiments/results/sweep/control_check.md`; proposed check, not run: rerun control s1 bit-for-bit). Distill FT on the l100 base
