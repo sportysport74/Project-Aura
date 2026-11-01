@@ -82,9 +82,17 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
     - **Reading:** today's chirality is a fixed random ±1 pattern plus a decayed sine/cosine mix weight. That's not yet the
       direction-dependent dynamics in the vision. Before the ablation below, exclude χ from weight decay (like `.phases`), so its
       magnitude reflects the gradient only.
+  - **Summary (Jon, 2026-10-31): current chirality is a fixed random sign (it can't cross zero) with decay-driven shrinkage, so learned
+    handedness is untested, not refuted.**
+  - **And without the per-token gate it can't be tested:** per-feature χ is redundant with Ω, Θ and the amplitude. A chirality layer
+    equals a plain oscillator layer with Ω' = χΩ and adjusted Θ and A (checked numerically, max difference 1e-6; derivation in
+    `experiments/plans/chirality_ab.md`). It changes training dynamics (the zero barrier, decay, and the heartbeat's view of the phases),
+    not what the model can compute. **Learned handedness needs the per-token gate**, where direction depends on the input.
 - **Experiments:**
-  1. Ablation (cheap, s25/m50, 3 seeds, 200M tokens): chirality off (`enable_chirality=False`), fixed random (today), context-gated.
-     If off = fixed, the sign pattern does nothing.
+  1. **Planned A/B at m50 (after the current queue): `experiments/plans/chirality_ab.md`.** A today's χ; B χ without weight decay;
+     C angle parameterization (moves smoothly between left and right, no dead zero); D C + per-token gate; E (recommended) today's χ +
+     gate. 200M tokens, 3 seeds, val loss + a new direction-sensitive benchmark + whether χ / β / the gate actually move. Expectation from
+     the redundancy result: A ≈ B ≈ C on val loss, and D/E are the real test.
   2. Direction-sensitivity test: tasks where order or direction is the whole signal (reversal, A→B vs B→A relations, "the reversal
      curse"). Compare context-gated chirality vs off vs vanilla. Pass: a gap on the directional tasks that doesn't appear on matched
      undirected tasks.
