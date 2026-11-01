@@ -105,6 +105,23 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-01 GPU fault analysis (CPU only; no resume yet, per the user).** Gaming monitoring logs NOT found (HWiNFO64 has logging on
+but no path in the registry and no recent sensor CSV on C:/D:): asked the user for the location.
+- Every nvlddmkm event in 30 days: 10-10 153 "Error occurred" (GPUID 2d00, old driver); **10-26 Event 13 "Graphics FECS Exception: UCODE
+  Fatal Error"** (GPU front-end microcontroller) → recovery (PF FLR) → ~100 "GpuRcReset TDR occurred" → BSOD 0x133; 10-29 BSOD 0x133;
+  10-31 and 11-01 our two faults: 153 "Error occurred on GPUID 2e00", **no TDR text**, nothing else in System/Application within ±25 min.
+  Also hard power-offs with no bugcheck (Kernel-Power 41) on 10-02, 10-13, 10-15 ×2.
+- **PCIe link Gen 4 x8 on an x16 card.** Stage-1 telemetry flat right up to the fault (447 W, 70-72 °C, 2.4-2.6 GHz; max 76 °C all run).
+  Hotspot and memory-junction temps aren't visible from WSL (N/A): need HWiNFO.
+- Reading: **not the TDR-timeout path** (those are logged as "TDR occurred"; ours aren't), so a TdrDelay change probably won't help
+  (retracts my earlier suggestion). 153s across two drivers and two bus IDs, a FECS microcode fatal error, an x8 link and unexplained
+  power-offs point to the hardware path (card seating/slot/riser, 12V-2x6 connector, PSU) more than a driver bug. Not proven.
+- **Stage-2 slowdown explained and fixed:** a resume bug, not the GPU. `--resume` loaded the state with map_location=cuda, which left AdamW's
+  `step` counters on the GPU (PyTorch keeps 'step' where it's loaded for non-fused AdamW), so every step synced once per param tensor: GPU
+  util 98% → 78%, 86k → 71-73k tok/s after every resume. Now loaded on the CPU; a resumed run from the real latest.pt holds **86k**. Cost so
+  far ~15% on 6.5 h of resumed training.
+- `scripts/lib_train.sh` now writes `<log>.gpu.csv` (clocks, mem clock, power, temp, util, PCIe gen/width, event reasons, every 30 s).
+
 **2026-11-01 05:47: second GPU driver error (nvlddmkm 153)**, stage 2 at step 182,735; the stall watchdog stopped the queue at 06:03
 (worked as designed). Not resumed; waiting for the user. Resume point latest.pt step 171,501 (05:04). Two 153s in ~9 h of training on driver
 621.01 at 450 W: the fault recurs under sustained compute load and isn't caused by gaming. Details in `checkpoints/pretrain/l100_10b/CRASHES.md`.

@@ -12,6 +12,12 @@ run_train() {
   local rc=0
   $PY -u train_overnight.py "$@" >> "$log" 2>&1 &
   local pid=$!
+  # GPU telemetry next to the log, every 30 s while the trainer runs (2026-11-01: stage 2 had none when it faulted)
+  ( echo "time,mib,util,temp,watts,sm_mhz,mem_mhz,pcie_gen,pcie_width,event_reasons" > "$log.gpu.csv"
+    while kill -0 "$pid" 2>/dev/null; do
+      nvidia-smi --query-gpu=memory.used,utilization.gpu,temperature.gpu,power.draw,clocks.sm,clocks.mem,pcie.link.gen.current,pcie.link.width.current,clocks_event_reasons.active \
+        --format=csv,noheader,nounits 2>/dev/null | sed "s/^/$(date +%F_%T),/" >> "$log.gpu.csv"; sleep 30
+    done ) &
   while kill -0 "$pid" 2>/dev/null; do
     sleep 30
     if kill -0 "$pid" 2>/dev/null && [ $(( $(date +%s) - $(stat -c %Y "$log") )) -gt "${STALL_SEC:-900}" ]; then

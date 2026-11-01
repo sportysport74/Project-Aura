@@ -667,7 +667,10 @@ def main():
         print(f"Initialised weights from {args.init_from} (fresh optimizer and schedule)")
     if args.resume_state:
         print(f"Resuming full training state: {args.resume_state}")
-        state = torch.load(args.resume_state, map_location=device, weights_only=False)
+        # Load on the CPU: optimizer.load_state_dict moves exp_avg/exp_avg_sq to the params' device but deliberately leaves
+        # AdamW's 'step' where it was loaded. With map_location=cuda the step counters ended up on the GPU, and AdamW then
+        # read them with .item() every step (one sync per param tensor): GPU util 98% -> 78%, ~15% slower after every resume.
+        state = torch.load(args.resume_state, map_location='cpu', weights_only=False)
         model.load_state_dict(state['model_state_dict'])
         optimizer.load_state_dict(state['optimizer_state_dict'])
         scheduler.load_state_dict(state['scheduler_state_dict'])
