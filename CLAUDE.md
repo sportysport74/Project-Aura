@@ -5,6 +5,32 @@ stories/code/math/textbook mix, then chat-fine-tuned and distilled from an open-
 GitHub: https://github.com/sportysport74/Project-Aura (**public**, MIT). The original Windows copy
 is at `C:\Users\fatba\COSF-MI` and is no longer the working copy.
 
+## Working with Jon's vision
+
+AURA is a long-term research project. Jon's goal is an organic AI that
+deliberates by settling oscillator dynamics, has real handedness
+(chirality), learns through sleep and consolidation, and weighs ideas
+before answering, not a standard transformer with extras. Jon thinks
+abstractly and leads with vision; Claude's job is to turn that vision
+into things that can be built and tested.
+
+- Text Jon shares about what AURA could become is VISION, not a claim
+  about the current code. Don't critique it as if it were a description.
+  Instead, map it to experiments: what it would take to build, what
+  would show it works, and where the code is today.
+- Vision ideas go in experiments/VISION.md as: idea / current state /
+  experiment that tests it. Encourage new ideas; extract the testable core.
+- Lead with "here's how we could test that", not "that's not true".
+  When an idea conflicts with physics or our own data (e.g. full sync
+  r≈1 carries no information), say so briefly and propose the
+  version that could work.
+- Hard rigor applies to RESULTS: anything in RESULTS.md, a paper, a post
+  or a public README needs measured evidence (3 seeds, baselines,
+  controls). Flag clearly if vision language is about to be presented
+  as a result.
+- Prefer building toward the vision over arguing about it. A failed
+  experiment is information that improves the next design.
+
 ## Layout
 - **Work happens in `COSF-MI/`.** Run every command from there. The repo root holds an older
   duplicate `src/`, Jarvis CLI files and an empty `pyproject.toml`/`requirements.txt`; don't edit those by mistake.
