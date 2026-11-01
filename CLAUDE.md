@@ -105,6 +105,16 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-01 gaming vs training (Arc Raiders = `PioneerGame.exe`).** Today 07:03-09:03 (`scripts/monitor_gpu_session.sh`, log in
+`COSF-MI/runs/monitor_20261101-070342`, 1h47m in game): core 2,745 MHz median, mem 14,001, **280 W median / 423 W max (never ≥440 W)**,
+59 °C median / 68 °C max, util 52% median, **no Windows GPU/WHEA/power events**. HWiNFO log 10-16 (`D:\fatba\Documents\arcraiders_hwinfo_log.csv..CSV`,
+575 W limit): 2,782 MHz, 327 W median / 532 W max, hotspot 95 °C max, memory junction 92 °C max, limiter mostly reliability voltage, **0 PCIe
+errors** on all 16 lane counters. Training (stage 1): 447 W flat at 98% util for hours, 70-72 °C. **Both faults happened only under sustained
+near-cap compute load, which gaming never reaches.** PCIe x8 cause found: the I226-V 2.5G NIC (installed 10-15 22:30) sits in the CPU x8
+slot ("J3600", root port 0:3.1), which splits the GPU's lanes x8/x8. The chipset x1 slots (J3702/J3703) are empty: move the NIC there to get
+x16 back (tidiness; not a likely fault cause, since the 10-10 fault predates the NIC). Next: HWiNFO logging during training (hotspot, memory
+junction, 12V rails, PCIe errors), optionally at 400 W.
+
 **2026-11-01 GPU fault analysis (CPU only; no resume yet, per the user).** Gaming monitoring logs NOT found (HWiNFO64 has logging on
 but no path in the registry and no recent sensor CSV on C:/D:): asked the user for the location.
 - Every nvlddmkm event in 30 days: 10-10 153 "Error occurred" (GPUID 2d00, old driver); **10-26 Event 13 "Graphics FECS Exception: UCODE
