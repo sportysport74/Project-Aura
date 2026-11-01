@@ -105,6 +105,10 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-01 05:47: second GPU driver error (nvlddmkm 153)**, stage 2 at step 182,735; the stall watchdog stopped the queue at 06:03
+(worked as designed). Not resumed; waiting for the user. Resume point latest.pt step 171,501 (05:04). Two 153s in ~9 h of training on driver
+621.01 at 450 W: the fault recurs under sustained compute load and isn't caused by gaming. Details in `checkpoints/pretrain/l100_10b/CRASHES.md`.
+
 **2026-11-01 03:04: stage 2 launched** (`runs/20261101-030419`, user: option 1, extension data unchanged). 10B success criterion fixed
 in `COSF-MI/experiments/plans/pretrain_10b.md`: knowledge-probe gain over 5B, 95% CI excluding 0. The post-hoc gate switch is recorded in
 **`COSF-MI/RESULTS.md`** (new: evidence-only results file). After stage 2: run `knowledge_pmi.py` on base/b5/b10 (the running queue doesn't
