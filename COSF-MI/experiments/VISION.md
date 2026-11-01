@@ -97,6 +97,35 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
      curse"). Compare context-gated chirality vs off vs vanilla. Pass: a gap on the directional tasks that doesn't appear on matched
      undirected tasks.
 
+## 3b. Deliberation by settling
+
+The source doc for this section didn't come through (2026-10-31): this is written from Jon's notes plus AKOrN as published. Add the
+doc's own claims under "Claims" when it's available.
+
+- **Claims (the vision, not evidence):**
+  1. Thinking is **settling**: the oscillators iterate their coupled dynamics until the phases stop changing, and the settled
+     pattern is the answer.
+  2. **More settling helps on harder problems** (deliberation), and harder problems **take more steps** to settle on their own, so
+     compute adapts to difficulty.
+  3. Meaning lives in **structured, partial synchrony**: which oscillators lock with which.
+- **Constraints, stated up front:**
+  - **Full synchrony (R ≈ 1) carries no information**: every phase is the same, so nothing distinguishes one input from another. If
+    meaning is in the phases, it has to be in partial, structured sync (clusters, relative phases), and "settled" can't mean "R → 1".
+    Today's heartbeat holds a global R near 0.3, which is a level of sync, not a structure.
+  - **Synchrony is not truth.** A settled state is self-consistent, not correct. Answers still need external verification (for
+    arithmetic: check the result programmatically), and "how settled" must be calibrated against correctness before it can be used as
+    confidence.
+- **Prior work:** AKOrN (Miyato, Löwe, Geiger, Welling, *Artificial Kuramoto Oscillatory Neurons*, ICLR 2025). Its neurons are oscillators
+  (unit vectors) updated by several weight-tied, generalized Kuramoto steps per layer, coupled through learned connectivity and driven
+  by the input. The paper reports gains on object discovery, robustness, calibration and Sudoku-style reasoning. Not reproduced here, and
+  not tested on language or arithmetic.
+- **Evidence in AURA today: none.** Each oscillator layer is a single pass, `A·(cos + χ·sin)(Ω·x + Θ)`: there's no iteration, no
+  coupling between oscillators beyond the heartbeat loss, and no notion of settled or halted.
+- **Test:** `experiments/plans/settling.md` (planned 2026-10-31, after the current queue). AKOrN-style settling at K = 1/4/8 weight-tied
+  iterations per block, plus adaptive halting (stop when the phase change < ε, log the steps). Test it on multiplication (~0% today) and
+  multi-step arithmetic: does more settling help, and do harder problems use more steps? m50, 3 seeds, against the vanilla baseline,
+  today's AURA, and a compute-matched control (the same extra compute without the Kuramoto dynamics).
+
 ## 4. Consolidation: sleep and decay turning short-term patterns into structure without forgetting
 
 - **Vision:** like synaptic consolidation, oscillation phases plus sleep let new learning settle into structural memory without
