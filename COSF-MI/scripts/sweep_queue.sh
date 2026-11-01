@@ -9,7 +9,8 @@
 # Run via launch_train.sh with TRAIN_CMD="bash scripts/sweep_queue.sh".
 # SIZES / SEEDS / ARMS override the grid, e.g. SIZES=l100 SEEDS="4 5 6" ARMS="on control" (extra seeds, same results.tsv).
 # Arm "vanilla" (2026-10-31): --projection linear, the same model with every oscillator projection replaced by nn.Linear.
-# Training goes through scripts/lib_train.sh: pause-aware (scripts/pause_train.sh / resume_train.sh) with a 15-min stall watchdog.
+# Arms "vanilla2" (linear + embedding scale + GELU + GPT init: the fixed baseline) and "embfix" (heartbeat on + embedding scale),
+# 2026-11-01, see experiments/plans/vanilla_embfix.md. Training goes through scripts/lib_train.sh: pause-aware (scripts/pause_train.sh / resume_train.sh) with a 15-min stall watchdog.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -29,7 +30,9 @@ for size in ${SIZES:-s25 m50 l100}; do
         on) hb=(--heartbeat live) ;;
         off) hb=(--heartbeat live --heartbeat-strength 0) ;;
         control) hb=(--heartbeat live_control) ;;
-        vanilla) hb=(--projection linear) ;;
+        vanilla) hb=(--projection linear) ;;   # broken recipe (2026-10-31): kept for the record, don't rerun
+        vanilla2) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;
+        embfix) hb=(--heartbeat live --emb-scale sqrt) ;;
       esac
       echo "=== $(date -Iseconds) ${size} ${arm} seed ${seed} -> ${out}"
       t0=$(date +%s)

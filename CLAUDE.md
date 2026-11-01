@@ -105,6 +105,15 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-01 11:07: stage 2 resumed under `scripts/stage2_supervisor.sh`** (run `runs/20261101-110726`; user: option A, 450 W,
+**limited auto-resume for this run only**: after a watchdog stop wait 5 min, check nvidia-smi + 450 W, resume; max 2; 2 faults within 3 h →
+stop for good; pause / CUDA error / PC crash → no auto-resume). Each fault appends the nvlddmkm events, run_train's `.gpu.csv` tail and the
+HWiNFO 10-min window (`experiments/hwinfo_fault_window.py`) to `CRASHES.md`. HWiNFO logs to `D:\fatba\Documents\trainglog_logs..CVS.CSV`;
+`train_hwinfo.csv` there is a symlink to it (the supervisor looks for `train_hwinfo*`). Resumed at 82k tok/s, 98% util, 450 W.
+After stage 2 the supervisor runs the 10B knowledge probe, then `scripts/post_stage2.sh`: the approved **vanilla2/embfix sweep**
+(`experiments/plans/vanilla_embfix.md`; gate: s25 vanilla2 loss ≤ 6.0 at step 2000). New model options (defaults unchanged):
+`--emb-scale sqrt`, `--ffn-activation gelu`, `--linear-init gpt`.
+
 **2026-11-01 gaming vs training (Arc Raiders = `PioneerGame.exe`).** Today 07:03-09:03 (`scripts/monitor_gpu_session.sh`, log in
 `COSF-MI/runs/monitor_20261101-070342`, 1h47m in game): core 2,745 MHz median, mem 14,001, **280 W median / 423 W max (never ≥440 W)**,
 59 °C median / 68 °C max, util 52% median, **no Windows GPU/WHEA/power events**. HWiNFO log 10-16 (`D:\fatba\Documents\arcraiders_hwinfo_log.csv..CSV`,

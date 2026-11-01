@@ -166,6 +166,13 @@ class COSFOscillatorConfig:
     #           no phases, so no heartbeat, Julia correction or chirality. Everything else (attention, layer norms,
     #           positional encoding, the tanh FFN activation, tied embeddings) is unchanged.
     projection: str = 'oscillator'
+    # Input and FFN recipe (2026-11-01; defaults = the original model). emb_scale 'sqrt' multiplies the token embeddings by
+    # sqrt(d_model) before the positional encoding: with std-0.02 embeddings the encoding (std ~0.5) outweighed the token 25:1.
+    # ffn_activation 'gelu' replaces the block's tanh. linear_init 'gpt' initializes plain nn.Linear projections (projection
+    # 'linear') GPT-2 style: N(0, 0.02), zero bias, the residual-output ones (attention out, ff2) scaled by 1/sqrt(2 * n_layers).
+    emb_scale: str = 'none'
+    ffn_activation: str = 'tanh'
+    linear_init: str = 'default'
     heartbeat_strength: float = 0.01  # coupling_strength for the sync loss
     # If set, only penalize R below this target (sync band instead of
     # pushing R -> 1, which means every feature carries the same phase)
@@ -1157,7 +1164,7 @@ class COSFOscillatorBlock(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
         # Activation: use tanh to keep bounded (Julia stability)
-        self.activation = nn.Tanh()
+        self.activation = nn.GELU() if getattr(config, 'ffn_activation', 'tanh') == 'gelu' else nn.Tanh()
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None, causal: bool = False) -> torch.Tensor:
         """Forward pass through oscillator block."""
@@ -1247,6 +1254,14 @@ class COSFOscillatorTransformer(nn.Module):
             self.register_buffer('control_offsets', psi, persistent=False)
 
         self._init_weights()
+        if getattr(config, 'linear_init', 'default') == 'gpt':
+            for block in self.blocks:
+                for name, mod in block.named_modules():
+                    if isinstance(mod, nn.Linear):
+                        resid = name in ('attn.out_oscillator', 'ff2')
+                        nn.init.normal_(mod.weight, 0.0, 0.02 / (math.sqrt(2 * config.n_layers) if resid else 1.0))
+                        if mod.bias is not None:
+                            nn.init.zeros_(mod.bias)
 
         # After _init_weights so the gate keeps its "start at +0.76" init
         groups = getattr(config, 'chirality_context_groups', 0)
@@ -1284,6 +1299,8 @@ class COSFOscillatorTransformer(nn.Module):
 
         # Embed tokens
         x = self.token_embedding(input_ids)  # [batch, seq, d_model]
+        if getattr(self.config, 'emb_scale', 'none') == 'sqrt':
+            x = x * math.sqrt(self.config.d_model)
 
         # Add resonant positional encoding
         x = self.pos_encoding(x)

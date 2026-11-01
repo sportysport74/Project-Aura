@@ -417,6 +417,11 @@ def main():
                         help='With --max-steps: report val loss on the first N val batches at the end')
     parser.add_argument('--projection', type=str, default='oscillator', choices=['oscillator', 'linear'],
                         help="linear = vanilla baseline: every oscillator projection replaced by nn.Linear of the same shape")
+    parser.add_argument('--emb-scale', type=str, default='none', choices=['none', 'sqrt'],
+                        help='sqrt: token embeddings × sqrt(d_model) before the positional encoding')
+    parser.add_argument('--ffn-activation', type=str, default='tanh', choices=['tanh', 'gelu'])
+    parser.add_argument('--linear-init', type=str, default='default', choices=['default', 'gpt'],
+                        help='gpt: GPT-2 init for plain nn.Linear projections (only with --projection linear)')
     parser.add_argument('--deterministic', action='store_true',
                         help='torch.use_deterministic_algorithms (slow; for bitwise tests such as scripts/test_resume.sh)')
     parser.add_argument('--save-every-minutes', type=float, default=0,
@@ -570,6 +575,9 @@ def main():
         enable_terahertz_scaling=False,
         heartbeat_mode=args.heartbeat,
         projection=args.projection,
+        emb_scale=args.emb_scale,
+        ffn_activation=args.ffn_activation,
+        linear_init=args.linear_init,
         heartbeat_strength=args.heartbeat_strength,
         heartbeat_target=args.heartbeat_target,
     )

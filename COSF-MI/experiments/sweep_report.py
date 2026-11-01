@@ -18,8 +18,8 @@ from scipy import stats
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "experiments/results/sweep"
 PARAMS = {"s25": 23.5e6, "m50": 50.2e6, "l100": 103.7e6}
-ARMS = ("on", "off", "control", "vanilla")
-PAIRS = (("off", "on"), ("control", "on"), ("off", "control"), ("vanilla", "on"), ("vanilla", "off"))
+ARMS = ("on", "off", "control", "vanilla", "vanilla2", "embfix")
+PAIRS = (("off", "on"), ("control", "on"), ("off", "control"), ("vanilla2", "on"), ("vanilla2", "embfix"), ("embfix", "on"))
 
 
 def main():
