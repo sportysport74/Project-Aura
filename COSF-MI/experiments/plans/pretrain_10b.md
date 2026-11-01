@@ -95,6 +95,17 @@ Stage 2 can run continuously (~17 h) or in pieces: pause any time, and the hourl
 | branch dir: latest + latest.prev + final_model (weights only) | 2.9 GB |
 | **peak** | **~54 GB** (C: down to ~145 GB free); ~26 GB after deleting the raw shards |
 
+## 10B success criterion (fixed 2026-11-01, before stage 2 finished; user decision)
+
+**10B succeeds if the format-neutral knowledge probe (`experiments/knowledge_pmi.py`, PMI per answer token, plain "Question/Answer"
+text) is higher at 10B than at 5B, with the paired-bootstrap 95% CI over the 100 questions excluding zero.** Run as
+`knowledge_pmi.py base=… b5=… b10=…` (the script reports each model against the first, so b10 − b5 is a second call with b5 first).
+Caveat: one training run per point, so the CI is over questions, not seeds.
+
+After stage 2 (the real knowledge curve in chat): ft_v2 fine-tune on the 2.2B, 5B and 10B bases, 2 seeds each, the same recipe, then
+chat-format factuality (`factuality_gen.py` + grader), paired over questions. The chat-format factuality of **base** models is not used
+any more (see the gate note at the top).
+
 ## Evaluation points and gate
 
 At 2.2B (existing), 5B (branch) and 10B (final), all annealed and re-scored in the same run:

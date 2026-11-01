@@ -105,6 +105,16 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-01 03:04: stage 2 launched** (`runs/20261101-030419`, user: option 1, extension data unchanged). 10B success criterion fixed
+in `COSF-MI/experiments/plans/pretrain_10b.md`: knowledge-probe gain over 5B, 95% CI excluding 0. The post-hoc gate switch is recorded in
+**`COSF-MI/RESULTS.md`** (new: evidence-only results file). After stage 2: run `knowledge_pmi.py` on base/b5/b10 (the running queue doesn't
+call it: don't edit a running bash script), then ft_v2 × {2.2B, 5B, 10B} × 2 seeds → chat factuality.
+**Vanilla baseline (`--projection linear`) FAILED TO TRAIN; not a result.** All 9 runs sat on the unigram plateau (loss ~7.4) for
+thousands of steps, with gnorm spikes to 13.7 and a final val of 4.5-7.5 with huge seed spread (oscillator arms: ~3.1). Cause found at init:
+token embedding std 0.02 vs positional encoding std 0.5 (position outweighs token 25:1 in the residual stream; true for both models), and
+linear q/k give attention logits 14× larger than the bounded oscillators (std 0.53 vs 0.038). The baseline needs a standard recipe
+(embedding scale, init, GELU, an lr check) before it means anything. Rows are in `experiments/results/sweep/results.tsv` with arm `vanilla`: ignore them.
+
 **10B pretrain, stage 1 DONE (2026-10-31 20:19; results `COSF-MI/experiments/results/pretrain_10b/`).** 5B branch val (v1) **2.7735**
 (2.2B base 2.8769). The planned gate (chat-format factuality) **FAILED and is invalid as a knowledge test**: 0.062 → 0.017. Cause: the
 extension left out the distill transcripts, so the only "You: … Aura: …" text in the new 2.8B tokens was arithmetic, and the 5B base now
