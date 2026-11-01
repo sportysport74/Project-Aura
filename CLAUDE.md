@@ -105,6 +105,16 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**10B pretrain, stage 1 DONE (2026-10-31 20:19; results `COSF-MI/experiments/results/pretrain_10b/`).** 5B branch val (v1) **2.7735**
+(2.2B base 2.8769). The planned gate (chat-format factuality) **FAILED and is invalid as a knowledge test**: 0.062 → 0.017. Cause: the
+extension left out the distill transcripts, so the only "You: … Aura: …" text in the new 2.8B tokens was arithmetic, and the 5B base now
+answers "Why does bread rise?" with "1372 - 22 = 1350 / Answer: 1350" (battery 53% → 69%). The base's own score was simile soup from the
+distill slice. **Format-neutral probe** (`experiments/knowledge_pmi.py`: log P(answer | its question) − log P(answer | 10 other questions),
+plain "Question/Answer" text, same answer on both sides so fluency cancels): PMI 0.316 → **0.357, +0.041 [95% CI +0.029, +0.054]**. So
+knowledge (question→answer association) does rise from 2.2B to 5B. **Stage 2 waits for the user.** Next fair gate: the same ft_v2
+fine-tune on both bases, then factuality. Vanilla baseline launched 21:31 by hand (`runs/20261031-213151`; the chain's launch at 20:20 was
+refused by launch_train's GPU-busy check while the grader was still exiting).
+
 **10B pretrain, stage 1 (2026-10-31):** approved and launched 06:11 (run `runs/20261031-061128`) on `data/corpus_v2/tok24k_ext` (7.80B
 tokens; raw shards 27.6 GB in `data/corpus_v2/raw`, deletable). At the 450 W cap the card is power-bound: **~86k tok/s** (not 94k),
 so stage 1 ≈ 9.6 h, stage 2 ≈ 17.8 h. **12:40:07: GPU driver error** (Windows nvlddmkm Event 153, "Error occurred on GPUID 2e00",

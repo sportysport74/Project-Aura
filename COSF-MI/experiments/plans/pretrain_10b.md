@@ -1,4 +1,9 @@
-# Plan: extend the l100 pretrain to 10B tokens (updated 2026-10-31; code ready and tested, NOT RUN, waits for approval)
+# Plan: extend the l100 pretrain to 10B tokens (stage 1 DONE 2026-10-31; stage 2 waits for the user)
+
+> **Gate result (2026-10-31): the chat-format factuality gate is invalid for base models.** Leaving the distill transcripts out of the
+> extension made "Aura:" mean arithmetic, so the 5B base answers science questions with sums (0.062 → 0.017). A format-neutral PMI probe
+> (`experiments/knowledge_pmi.py`) shows knowledge rising: +0.041 [+0.029, +0.054]. Use the PMI probe plus a fine-tuned factuality
+> comparison (the same ft_v2 fine-tune on each base) as the gate. Details in CLAUDE.md Setup status.
 
 Question: does knowledge, measured by the factuality eval (`experiments/factuality/`), climb with more pretraining at
 104M, or is 104M the ceiling? Eval points: **2.2B** (the existing base, re-scored in every eval run so comparisons are paired),

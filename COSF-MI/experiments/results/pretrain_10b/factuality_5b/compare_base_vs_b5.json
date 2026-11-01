@@ -1,0 +1,16 @@
+{
+ "a": "base",
+ "b": "b5",
+ "encoding": "joined",
+ "decoding": "sampled_rep",
+ "questions": 100,
+ "score_a": 0.0617,
+ "score_b": 0.0167,
+ "gain": -0.045,
+ "ci95": [
+  -0.0717,
+  -0.02
+ ],
+ "min_gain": 0.05,
+ "gate": "FAIL"
+}
