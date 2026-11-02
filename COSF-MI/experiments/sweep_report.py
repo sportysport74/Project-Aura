@@ -18,9 +18,10 @@ from scipy import stats
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "experiments/results/sweep"
 PARAMS = {"s25": 23.5e6, "m50": 50.2e6, "l100": 103.7e6}
-ARMS = ("on", "off", "control", "vanilla", "vanilla2", "embfix", "aura_std")
+ARMS = ("on", "off", "control", "vanilla", "vanilla2", "embfix", "aura_std", "aura_std_off")
 PAIRS = (("off", "on"), ("control", "on"), ("off", "control"), ("vanilla2", "on"), ("embfix", "on"),
-         ("aura_std", "vanilla2"), ("embfix", "aura_std"), ("embfix", "vanilla2"))
+         ("aura_std", "vanilla2"), ("embfix", "aura_std"), ("embfix", "vanilla2"),
+         ("aura_std_off", "aura_std"))
 
 
 def main():
