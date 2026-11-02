@@ -105,6 +105,11 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-02 03:58: 10B pretrain DONE, no faults in the final 17 h** (0/2 auto-resumes; 450 W; max 77 °C). v1 val 2.6802. **10B criterion
+PASS**: knowledge PMI 0.357 → 0.383, +0.026 [+0.011, +0.041] (RESULTS.md). The vanilla2 gate passed easily (s25 loss 4.57 at step 2000 vs
+AURA 5.45), and the vanilla2/embfix sweep started 04:00 (ETA ~10:30). **Early, 1 seed: s25 vanilla2 val 3.431 vs heartbeat-on 4.055-4.086.**
+Next after the sweep: ft_v2 × {2.2B, 5B, 10B} × 2 seeds → chat factuality.
+
 **2026-11-01 11:07: stage 2 resumed under `scripts/stage2_supervisor.sh`** (run `runs/20261101-110726`; user: option A, 450 W,
 **limited auto-resume for this run only**: after a watchdog stop wait 5 min, check nvidia-smi + 450 W, resume; max 2; 2 faults within 3 h →
 stop for good; pause / CUDA error / PC crash → no auto-resume). Each fault appends the nvlddmkm events, run_train's `.gpu.csv` tail and the

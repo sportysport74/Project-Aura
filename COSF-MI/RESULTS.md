@@ -4,6 +4,27 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-02 — 10B-token pretrain of l100 (104M): knowledge at 10B (pre-set criterion met)
+
+- **Model:** `checkpoints/pretrain/l100_10b/best_model.pt`: the main WSD run continued from 4.5B to the end of the 7.8B-token extension
+  epoch (10.0B total), decayed to 0 over the last 10%. Heartbeat on, seed 1, **one training run per point** (CIs are over the 100 questions).
+- **Criterion, fixed 2026-11-01 before stage 2 finished:** knowledge-probe gain over 5B with the paired-bootstrap 95% CI excluding zero.
+- **Result: PASS.** PMI 0.357 (5B) → **0.383 (10B), gain +0.026, 95% CI [+0.011, +0.041]**
+  (`experiments/results/pretrain_10b/knowledge_pmi_10b.json`). The true answer's log-prob per token rose too: +0.095 [+0.076, +0.115].
+
+| tokens | v1 val loss | knowledge PMI (vs 2.2B) |
+|---|---|---|
+| 2.2B | 2.8769 | 0.316 |
+| 5.0B | 2.7735 | 0.357 (+0.041 [+0.029, +0.054]) |
+| 10.0B | **2.6802** | **0.383** (+0.067 over 2.2B) |
+
+- Reading: knowledge keeps rising with more tokens at 104M, with diminishing returns per token (+0.041 for 2.8B more, +0.026 for 5B
+  more). Chat-format factuality on the bases stays invalid (the 10B base scores 0.00 because "Aura:" now means arithmetic, see below).
+- Still open: whether the knowledge shows up in chat (ft_v2 on the 2.2B/5B/10B bases × 2 seeds, then chat factuality).
+- Run notes: two GPU driver faults (nvlddmkm 153, 10-31 12:40 and 11-01 05:47) hung the run. The hourly full-state saves and the stall
+  watchdog bounded the loss; the final 17 h segment ran without a fault. Two resumes before 2026-11-01 ran ~15% slower (a resume bug, now
+  fixed). Neither affects the numbers above. `checkpoints/pretrain/l100_10b/CRASHES.md`.
+
 ## 2026-11-01 — 10B-token pretrain of l100 (104M): knowledge at 5B vs 2.2B
 
 - **Models:** `checkpoints/pretrain/l100_on_s1` (2.2B tokens, cosine to 0) vs the 5B branch `checkpoints/pretrain/l100_5b_branch`
