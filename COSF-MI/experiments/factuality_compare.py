@@ -19,9 +19,11 @@ SCORE = {"CORRECT": 1.0, "PARTIAL": 0.5}
 
 
 def per_question(rows, model, encoding, decoding):
+    """Mean score per question; MODEL may be a comma-separated list (e.g. both fine-tune seeds), pooled."""
+    models = set(model.split(","))
     by = defaultdict(list)
     for r in rows:
-        if r["model"] == model and r["encoding"] == encoding and r["decoding"] == decoding:
+        if r["model"] in models and r["encoding"] == encoding and r["decoding"] == decoding:
             by[r["id"]].append(SCORE.get(r["verdict"], 0.0))
     return {q: sum(v) / len(v) for q, v in by.items()}
 
@@ -51,7 +53,8 @@ def main():
            "score_a": round(sum(a[q] for q in qs) / len(qs), 4), "score_b": round(sum(b[q] for q in qs) / len(qs), 4),
            "gain": round(gain, 4), "ci95": [round(lo, 4), round(hi, 4)], "min_gain": args.min_gain,
            "gate": "PASS" if ok else "FAIL"}
-    (ROOT / args.dir / f"compare_{args.a}_vs_{args.b}.json").write_text(json.dumps(res, indent=1))
+    tag = lambda m: m.replace(",", "+")  # noqa: E731
+    (ROOT / args.dir / f"compare_{tag(args.a)}_vs_{tag(args.b)}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res))
 
 

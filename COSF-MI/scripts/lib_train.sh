@@ -10,7 +10,7 @@
 run_train() {
   local log=$1; shift
   local rc=0
-  $PY -u train_overnight.py "$@" >> "$log" 2>&1 &
+  $PY -u "${TRAIN_SCRIPT:-train_overnight.py}" "$@" >> "$log" 2>&1 &   # TRAIN_SCRIPT=finetune_chat.py for fine-tunes
   local pid=$!
   # GPU telemetry next to the log, every 30 s while the trainer runs (2026-11-01: stage 2 had none when it faulted)
   ( echo "time,mib,util,temp,watts,sm_mhz,mem_mhz,pcie_gen,pcie_width,event_reasons" > "$log.gpu.csv"
