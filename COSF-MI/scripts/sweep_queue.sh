@@ -33,6 +33,7 @@ for size in ${SIZES:-s25 m50 l100}; do
         vanilla) hb=(--projection linear) ;;   # broken recipe (2026-10-31): kept for the record, don't rerun
         vanilla2) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;
         embfix) hb=(--heartbeat live --emb-scale sqrt) ;;
+        aura_std) hb=(--heartbeat live --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;   # vanilla2's recipe, oscillator projections
       esac
       echo "=== $(date -Iseconds) ${size} ${arm} seed ${seed} -> ${out}"
       t0=$(date +%s)

@@ -42,3 +42,32 @@ Per arm and size:
 
 Caveat to report with any rule-2 outcome: both families use the AURA-tuned lr (6e-4). If rule 2 fires, run a short lr check for vanilla2
 (3e-4 / 1e-3 at s25) and mention whether vanilla2 could be even better. That can only strengthen rule 2, never reverse it.
+
+---
+
+## Addendum 1 (2026-11-02 04:30 PST, before any m50 / l100 result; user decision)
+
+**Confound:** vanilla2 differs from embfix in more than the projections: vanilla2 also has GELU and GPT init (pre-LN is already shared:
+both use `x + f(LN(x))` and a final LayerNorm). So vanilla2 vs embfix measures oscillators + recipe, not oscillators alone.
+
+**New arm `aura_std`** = AURA (oscillator projections, heartbeat on) with the exact vanilla2 recipe: `--emb-scale sqrt --ffn-activation gelu
+--linear-init gpt`. GPT init applies to nn.Linear layers. Its residual rule (layers that write into the residual stream, attention-out
+and ff2, start 1/√(2·n_layers) smaller) is applied to those oscillator layers' amplitudes, the oscillator counterpart of the output weight
+scale. **Only the projections differ from vanilla2.** Queued after the current sweep: s25 / m50 / l100 × seeds 1-3.
+
+**What each comparison measures (this replaces "embfix" in rules 1-4 above):**
+- **Oscillator verdict = `aura_std` vs `vanilla2`.** Rules 1-4 apply with aura_std in embfix's place. Rule 1 ("adopt for AURA going
+  forward") then means: adopt the vanilla2 recipe (embed fix + GELU + init) for AURA.
+- **Recipe effect = `embfix` vs `aura_std`** (both oscillator, both embed fix; the difference is GELU + init). Reported with the same
+  statistics, no decision attached.
+- embfix vs vanilla2 is still reported (oscillators + recipe together), but it no longer decides anything.
+
+**Equal GPU-hours, not only equal tokens:** reported for every pair:
+1. **iso-compute across sizes** (free): for each aura_std size, the vanilla2 size with ≤ the same measured GPU time per run, with both
+   val losses (e.g. if vanilla2 l100 takes ≤ aura_std m50's time, compare those two).
+2. **matched-budget runs** (optional, needs the user's OK): vanilla2 retrained at each size for the token budget it reaches in aura_std's
+   GPU time (≈ 1.7-2× the tokens at its measured speed), cosine decayed to that budget, 3 seeds. That's the only clean equal-time comparison:
+   comparing a mid-schedule curve point with an annealed endpoint would be biased. Cost ≈ aura_std's GPU time (≈ 4 h).
+
+Known at the time of this addendum: s25 vanilla2 seeds 1-2 (3.4310, 3.4308), s25 embfix seed 1 (3.7404). Nothing at m50 / l100, and
+nothing for aura_std.

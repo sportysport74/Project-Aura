@@ -1257,11 +1257,16 @@ class COSFOscillatorTransformer(nn.Module):
         if getattr(config, 'linear_init', 'default') == 'gpt':
             for block in self.blocks:
                 for name, mod in block.named_modules():
+                    resid = name in ('attn.out_oscillator', 'ff2')
                     if isinstance(mod, nn.Linear):
-                        resid = name in ('attn.out_oscillator', 'ff2')
                         nn.init.normal_(mod.weight, 0.0, 0.02 / (math.sqrt(2 * config.n_layers) if resid else 1.0))
                         if mod.bias is not None:
                             nn.init.zeros_(mod.bias)
+                    elif resid and isinstance(mod, COSFOscillatorLayer):
+                        # 'aura_std' (2026-11-02): the part of GPT init that carries over to oscillators is the residual rule,
+                        # i.e. layers writing into the residual stream start 1/sqrt(2 * n_layers) smaller (here: their amplitudes)
+                        with torch.no_grad():
+                            mod.amplitudes.mul_(1 / math.sqrt(2 * config.n_layers))
 
         # After _init_weights so the gate keeps its "start at +0.76" init
         groups = getattr(config, 'chirality_context_groups', 0)
