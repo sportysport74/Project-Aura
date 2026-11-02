@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-02 09:47: vanilla2/embfix sweep DONE** (`COSF-MI/experiments/results/sweep/summary.md`; 3 seeds each, seed sd ≤ 0.008).
+val loss (on / embfix / vanilla2): s25 4.066 / 3.741 / 3.431; m50 3.903 / 3.540 / 3.255; l100 3.760 / 3.394 / 3.141. **The embed fix alone
+improves AURA by 0.33-0.37 at every size** (paired p ≤ 0.001), and vanilla2 is a further 0.25-0.31 ahead at ~2× the tok/s. **No oscillator
+verdict yet**: per the 04:30 addendum that's aura_std vs vanilla2 (aura_std running since 09:48, then ft_v2). Note: the 10B pretrain and
+every earlier AURA run used the unfixed embedding.
+
 **2026-11-02 03:58: 10B pretrain DONE, no faults in the final 17 h** (0/2 auto-resumes; 450 W; max 77 °C). v1 val 2.6802. **10B criterion
 PASS**: knowledge PMI 0.357 → 0.383, +0.026 [+0.011, +0.041] (RESULTS.md). The vanilla2 gate passed easily (s25 loss 4.57 at step 2000 vs
 AURA 5.45), and the vanilla2/embfix sweep started 04:00 (ETA ~10:30). **Early, 1 seed: s25 vanilla2 val 3.431 vs heartbeat-on 4.055-4.086.**
