@@ -4,6 +4,35 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-03 — Oscillator projections vs a standard transformer (pre-registered; rule 2 fired)
+
+- **Design** (pre-registered in `experiments/plans/vanilla_embfix_decision.md`, 2026-11-02 04:22, addendum 04:30, both before any
+  m50/l100 result): `aura_std` = AURA (oscillator projections, heartbeat on) with the standard recipe (token embeddings × √d_model, GELU,
+  GPT init incl. the residual rule on the oscillator amplitudes) vs `vanilla2` = the same model with plain linear projections. Only the
+  projections differ (params within 0.2%). s25 / m50 / l100, 3 seeds each, 200M tokens, same data, schedule and seeds (paired), v1 val.
+  Results: `experiments/results/sweep/{results.tsv,summary.md}`.
+
+| size | vanilla2 | aura_std | gap (aura_std − vanilla2) | paired t, p | embfix (AURA, tanh, default init) |
+|---|---|---|---|---|---|
+| s25 (23.5M) | 3.4311 ± 0.0004 | 3.7603 ± 0.0039 | **+0.329** | 136.2, < 0.001 | 3.7414 ± 0.0049 |
+| m50 (50.2M) | 3.2552 ± 0.0014 | 3.5542 ± 0.0035 | **+0.299** | 130.4, < 0.001 | 3.5397 ± 0.0082 |
+| l100 (103.7M) | 3.1410 ± 0.0013 | 3.4116 ± 0.0032 | **+0.271** | 111.2, < 0.001 | 3.3936 ± 0.0011 |
+
+- **Verdict (rule 2): oscillator projections cost quality at this scale.** The gap is ~100× the seed sd at every size and shrinks only
+  slowly with size (0.33 → 0.30 → 0.27). Per the pre-registered rule, the next designs use a standard backbone, with oscillator mechanisms
+  added as modules that must each beat vanilla2 on their own test.
+- **Compute** (450 W cap): vanilla2 is 1.9-2.3× faster (588k / 346k / 173k tok/s vs 313k / 149k / 81k). At equal GPU time it's further
+  ahead: aura_std l100 (41 min/run) 3.412 vs vanilla2 l100 (19 min) 3.141; aura_std m50 (22 min) 3.554 vs vanilla2 l100 (19 min) 3.141.
+  Loss improvement per GPU-hour over a fixed reference (s25 heartbeat-off, old embedding, 4.1266): vanilla2 7.36 / 5.43 / 3.06 vs aura_std
+  2.07 / 1.54 / 1.04.
+- **Recipe effect** (embfix vs aura_std, both oscillator): GELU + GPT init make AURA slightly *worse*, by 0.015-0.019 (paired p 0.06 / 0.16 /
+  0.014). The recipe doesn't explain the gap.
+- **Embedding fix** (embfix vs the earlier heartbeat-on arm, same seeds): −0.33 / −0.36 / −0.37. The std-0.02 token embedding next to a
+  std-0.5 positional encoding had been costing AURA more than the whole oscillator-vs-linear gap.
+- **Caveats:** one learning rate (6e-4, tuned on AURA) for both; the pre-registered lr check for vanilla2 (3e-4 / 1e-3, s25) is queued and
+  can only widen the gap. 200M tokens per run (under-trained at l100). The earlier `vanilla` arm (2026-10-31) was a broken recipe and is
+  not a result.
+
 ## 2026-11-02 — 10B-token pretrain of l100 (104M): knowledge at 10B (pre-set criterion met)
 
 - **Model:** `checkpoints/pretrain/l100_10b/best_model.pt`: the main WSD run continued from 4.5B to the end of the 7.8B-token extension

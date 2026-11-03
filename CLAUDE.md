@@ -105,6 +105,11 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-03: oscillator verdict (pre-registered rule 2 fired, RESULTS.md):** aura_std trails vanilla2 by +0.329 / +0.299 / +0.271
+(paired p < 0.001 at every size), at ~half the tok/s. Next designs: **vanilla2 backbone + oscillator ideas as modules that must each beat
+vanilla2** (VISION.md §0). GELU + GPT init make oscillator-AURA slightly worse (+0.015-0.019). Queue: ft_v2 curve (relaunched 04:58 after a
+`report.json` lookup bug, fixed; ETA ~10:30) → heartbeat retest (aura_std on vs off, s25/m50) → vanilla2 lr check (s25: 3e-4, 1e-3).
+
 **2026-11-02 09:47: vanilla2/embfix sweep DONE** (`COSF-MI/experiments/results/sweep/summary.md`; 3 seeds each, seed sd ≤ 0.008).
 val loss (on / embfix / vanilla2): s25 4.066 / 3.741 / 3.431; m50 3.903 / 3.540 / 3.255; l100 3.760 / 3.394 / 3.141. **The embed fix alone
 improves AURA by 0.33-0.37 at every size** (paired p ≤ 0.001), and vanilla2 is a further 0.25-0.31 ahead at ~2× the tok/s. **No oscillator

@@ -13,6 +13,12 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
 
 ## 0. The prerequisite: do oscillator layers beat (or match) a standard transformer at all?
 
+> **Tested 2026-11-03 (pre-registered, 3 seeds, RESULTS.md): no, not as projections.** With the same recipe, oscillator projections
+> (`aura_std`) trail plain linear ones (`vanilla2`) by 0.33 / 0.30 / 0.27 val loss at 23M / 50M / 104M, at about half the speed. Per the
+> pre-registered rule, **the next designs use a standard (vanilla2) backbone**, and each oscillator idea below comes back as a **module
+> on top of it that has to beat vanilla2 on its own test** (heartbeat, chirality gate, settling, sleep). The sections below still describe
+> the ideas; their experiments should now be read as "vanilla2 + module vs vanilla2".
+
 - **Vision:** an architecture outside the transformer monoculture that's worth building on.
 - **Current state:** never measured. Every comparison so far is oscillators vs oscillators (heartbeat on/off/control). The model
   docstring says it computes "via phase synchronization instead of matrix multiplication", but each oscillator layer is a matmul

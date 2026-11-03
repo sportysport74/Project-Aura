@@ -35,6 +35,8 @@ for size in ${SIZES:-s25 m50 l100}; do
         embfix) hb=(--heartbeat live --emb-scale sqrt) ;;
         aura_std) hb=(--heartbeat live --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;   # vanilla2's recipe, oscillator projections
         aura_std_off) hb=(--heartbeat live --heartbeat-strength 0 --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;
+        vanilla2_lr3e4) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --lr 3e-4) ;;   # rule-2 lr check
+        vanilla2_lr1e3) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --lr 1e-3) ;;
       esac
       echo "=== $(date -Iseconds) ${size} ${arm} seed ${seed} -> ${out}"
       t0=$(date +%s)
