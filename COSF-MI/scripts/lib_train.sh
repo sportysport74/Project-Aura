@@ -1,4 +1,10 @@
 # shellcheck shell=bash
+# mark_failed REASON...: a chain that stops on an error writes run_control/FAILED (time, script, reason, log), so it's visible at a glance
+# (standing rule, 2026-11-03). scripts/resume_train.sh archives it to run_control/FAILED.<time> when the chain is relaunched.
+mark_failed() {
+  mkdir -p run_control
+  { echo "time: $(date -Iseconds)"; echo "script: ${0##*/}"; echo "reason: $*"; } > run_control/FAILED
+}
 # Shared by the queue scripts (source it). run_train LOG ARGS...: runs train_overnight.py, appending to LOG.
 #   exit 0  -> returns
 #   exit 75 -> paused on request (scripts/pause_train.sh): the whole queue exits 0 here, so it doesn't move on to the next stage
@@ -24,6 +30,7 @@ run_train() {
       echo "=== $(date -Iseconds) STOPPED: no training progress for ${STALL_SEC:-900} s (hung; likely a GPU driver error, check the"
       echo "    Windows System log for nvlddmkm events). Trainer killed, not retrying. Resume after a look: bash scripts/resume_train.sh"
       kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+      mark_failed "stall watchdog: no progress in $log for ${STALL_SEC:-900} s (likely a GPU driver error)"
       exit 1
     fi
   done
@@ -34,8 +41,10 @@ run_train() {
   elif [ "$rc" != 0 ]; then
     if grep -qE "CUDA error|AcceleratorError|CUDA_ERROR" "$log"; then
       echo "=== $(date -Iseconds) STOPPED: CUDA error (not retrying)"
+      mark_failed "CUDA error in $log"
     else
       echo "=== $(date -Iseconds) STOPPED: training failed with exit code $rc (not retrying)"
+      mark_failed "training failed with exit code $rc: $(grep -aE 'Error|Exception' "$log" | tail -1 | cut -c1-160) (log $log)"
     fi
     tail -n 20 "$log"
     exit 1

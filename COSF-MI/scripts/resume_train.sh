@@ -14,5 +14,6 @@ if pgrep -f "^[^ ]*python[0-9.]* -u train_overnight.py" > /dev/null; then echo "
 [ -f run_control/LAST_QUEUE ] || { echo "No run_control/LAST_QUEUE: nothing to resume." >&2; exit 1; }
 cmd=$(cat run_control/LAST_QUEUE)
 rm -f run_control/PAUSE
+if [ -f run_control/FAILED ]; then mv run_control/FAILED "run_control/FAILED.$(date +%Y%m%d-%H%M%S)"; echo "Archived run_control/FAILED (relaunching)."; fi
 echo "Power cap ${cap} W OK. Relaunching: $cmd"
 TRAIN_CMD="env ACK_CRASH=${ACK_CRASH:-0} $cmd" ~/.claude/skills/ml-training/scripts/launch_train.sh configs/smoke.yaml

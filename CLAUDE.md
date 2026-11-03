@@ -624,6 +624,11 @@ Open:
 - **GPU power cap 450 W for every long run** (user rule, 2026-10-31). The cap (`nvidia-smi -pl 450`, admin PowerShell on Windows) **resets on
   reboot**, so check it before any long run: `nvidia-smi --query-gpu=power.limit --format=csv,noheader` must print `450.00 W`.
   **If it doesn't, stop and ask the user; don't launch** (and don't try to set it from WSL).
+- **Unattended chains (user rule, 2026-11-03):** before launching any unattended chain, **smoke-test every phase** with the exact flags
+  (≈20 training steps, or a dry run for eval/data phases: tiny inputs, same scripts and paths). The 11-03 ft_v2 failure (a missing
+  `report.json`, 3.5 GPU-h lost) is what this catches. When a chain stops on an error it writes **`run_control/FAILED`** (time, script,
+  reason, log; `mark_failed` in `scripts/lib_train.sh`), and `scripts/resume_train.sh` archives it to `run_control/FAILED.<time>` on relaunch.
+  Check for that file first when asked how a run is going.
 - **Compiled runs aren't bit-reproducible** (`--compile` is the default): the same seed and config diverge after ~100-200 steps.
   Eager runs with the same seed are bit-identical. Published or compared results must use `--no-compile`, or report
   several seeds (mean ± spread), never a single compiled run.

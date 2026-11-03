@@ -13,6 +13,7 @@
 # Launch: TRAIN_CMD="bash scripts/stage2_supervisor.sh" ~/.claude/skills/ml-training/scripts/launch_train.sh configs/smoke.yaml
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
+source scripts/lib_train.sh
 PY=.venv/bin/python
 MAIN=checkpoints/pretrain/l100_10b
 STATE=run_control/stage2_supervisor.state
@@ -72,9 +73,9 @@ while true; do
     last_fault=$fault; save_state
     say "waiting 5 min before checking the GPU"
     sleep 300
-    if ! timeout 60 nvidia-smi > /dev/null 2>&1; then say "STOP: nvidia-smi doesn't respond. Waiting for the user."; exit 1; fi
+    if ! timeout 60 nvidia-smi > /dev/null 2>&1; then say "STOP: nvidia-smi doesn't respond. Waiting for the user."; mark_failed "stage2 supervisor stopped (see run_control/stage2_supervisor.log)"; exit 1; fi
     cap=$(nvidia-smi --query-gpu=power.limit --format=csv,noheader,nounits | head -1)
-    if [ "${cap%.*}" != 450 ]; then say "STOP: power limit ${cap} W, not 450 W. Waiting for the user."; exit 3; fi
+    if [ "${cap%.*}" != 450 ]; then say "STOP: power limit ${cap} W, not 450 W. Waiting for the user."; mark_failed "stage2 supervisor stopped (see run_control/stage2_supervisor.log)"; exit 3; fi
     resumes=$((resumes + 1)); save_state
     say "GPU responds, cap ${cap} W: auto-resume $resumes/2 from latest.pt"
   else
