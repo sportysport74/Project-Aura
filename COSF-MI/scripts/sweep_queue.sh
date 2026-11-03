@@ -40,7 +40,7 @@ for size in ${SIZES:-s25 m50 l100}; do
       t0=$(date +%s)
       run_train "$out/train.log" --model-size "$size" --corpus data/corpus_v1/tok24k_v2 --seq-len 512 --batch-size 32 \
         --lr 6e-4 --warmup 500 --epochs 1 --max-steps $STEPS --decay-steps $STEPS --eval-batches 100000 --seed "$seed" \
-        --log-every 200 --save-every 1000000 --save-final "${hb[@]}" --checkpoint-dir "$out"
+        --log-every 200 --save-every 1000000 --save-final --resume auto "${hb[@]}" --checkpoint-dir "$out"   # --resume auto: a paused run continues
       val=$(grep -oP 'val_loss=\K[0-9.]+' "$out/train.log" | tail -1 || true)
       tps=$(grep -oP 'tok/s=\K[0-9]+' "$out/train.log" | tail -n +5 | sort -n | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}' || true)
       peak=$(grep -oP 'peak VRAM \K[0-9.]+' "$out/train.log" | tail -1 || true)
