@@ -270,7 +270,9 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     run_config = dict(vars(args), steps=steps, train_conversations=len(train_x))
     if args.pilot:  # rule: record the distillation teacher and its licence per run
-        report = json.loads((Path(args.pilot) / "report.json").read_text())
+        # ft_v1 writes report.json, ft_v2 (build_factfirst.py) run_config.json; both carry teacher + teacher_license
+        rp = Path(args.pilot) / "report.json"
+        report = json.loads((rp if rp.exists() else Path(args.pilot) / "run_config.json").read_text())
         run_config.update(teacher=report["teacher"], teacher_license=report["teacher_license"])
     elif args.distill:
         run_config.update(teacher="Qwen/Qwen2.5-32B-Instruct (Ollama qwen2.5:32b)", teacher_license="Apache-2.0")
