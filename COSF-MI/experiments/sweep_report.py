@@ -18,10 +18,12 @@ from scipy import stats
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "experiments/results/sweep"
 PARAMS = {"s25": 23.5e6, "m50": 50.2e6, "l100": 103.7e6}
-ARMS = ("on", "off", "control", "vanilla", "vanilla2", "embfix", "aura_std", "aura_std_off")
+ARMS = ("on", "off", "control", "vanilla", "vanilla2", "embfix", "aura_std", "aura_std_off",
+        "settle_r4", "settle_c", "settle_d", "settle_e", "settle_f", "vanilla2_lr3e4", "vanilla2_lr1e3")
 PAIRS = (("off", "on"), ("control", "on"), ("off", "control"), ("vanilla2", "on"), ("embfix", "on"),
          ("aura_std", "vanilla2"), ("embfix", "aura_std"), ("embfix", "vanilla2"),
-         ("aura_std_off", "aura_std"))
+         ("aura_std_off", "aura_std"), ("settle_r4", "vanilla2"), ("settle_c", "settle_r4"), ("settle_f", "settle_r4"),
+         ("settle_f", "settle_c"), ("settle_d", "settle_e"), ("settle_c", "vanilla2"), ("settle_f", "vanilla2"))
 
 
 def main():

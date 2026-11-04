@@ -143,6 +143,7 @@ def train_with_gentle_sleep(
             if settle_on:  # settling module: criticality controller + per-step diagnostics (outside the compiled forward)
                 diag = model.settle_after_step(global_step + 1, bool(log_every) and (global_step + 1) % log_every == 0)
                 if diag:
+                    Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
                     with open(Path(checkpoint_dir) / "settle_diag.jsonl", "a") as f:
                         f.write(json.dumps(diag) + "\n")
             scheduler.step()

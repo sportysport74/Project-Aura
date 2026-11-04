@@ -17,13 +17,13 @@ PY=.venv/bin/python
 source scripts/lib_train.sh
 mkdir -p run_control
 echo "env SIZES='${SIZES:-s25 m50 l100}' SEEDS='${SEEDS:-1 2 3}' ARMS='${ARMS:-on off control}' bash scripts/sweep_queue.sh" > run_control/LAST_QUEUE
-RES=experiments/results/sweep/results.tsv
-STEPS=12207
+RES=${RES:-experiments/results/sweep/results.tsv}
+STEPS=${STEPS:-12207}   # STEPS / CKROOT / RES overridable for smoke tests
 [ -f "$RES" ] || printf "size\tarm\tseed\tval_loss\tmedian_tok_s\tpeak_gib\tminutes\n" > "$RES"
 for size in ${SIZES:-s25 m50 l100}; do
   for seed in ${SEEDS:-1 2 3}; do
     for arm in ${ARMS:-on off control}; do
-      out=checkpoints/sweep/${size}_${arm}_s${seed}
+      out=${CKROOT:-checkpoints/sweep}/${size}_${arm}_s${seed}
       if [ -f "$out/final_model.pt" ]; then echo "=== skip ${size} ${arm} s${seed} (done)"; continue; fi
       mkdir -p "$out"
       case $arm in
@@ -35,6 +35,11 @@ for size in ${SIZES:-s25 m50 l100}; do
         embfix) hb=(--heartbeat live --emb-scale sqrt) ;;
         aura_std) hb=(--heartbeat live --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;   # vanilla2's recipe, oscillator projections
         aura_std_off) hb=(--heartbeat live --heartbeat-strength 0 --emb-scale sqrt --ffn-activation gelu --linear-init gpt) ;;
+        settle_c) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --settle settle --settle-K 1.0) ;;   # experiments/plans/settling_vanilla2.md
+        settle_d) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --settle settle --settle-K 1.0 --settle-clamp phi) ;;
+        settle_e) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --settle settle --settle-K 1.0 --settle-clamp two) ;;
+        settle_f) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --settle settle --settle-K 1.0 --settle-controller auto) ;;
+        settle_r4) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --settle repeat --settle-repeats "${SETTLE_REPEATS:?set SETTLE_REPEATS from the compute-matching smoke}") ;;
         vanilla2_lr3e4) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --lr 3e-4) ;;   # rule-2 lr check
         vanilla2_lr1e3) hb=(--projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --lr 1e-3) ;;
       esac

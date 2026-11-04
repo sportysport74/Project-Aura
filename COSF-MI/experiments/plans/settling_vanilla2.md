@@ -47,3 +47,20 @@ tokens), var(R) across the batch's tokens, and a finite-difference Lyapunov esti
 ## Settling inside the new base
 
 The new-base plan (`experiments/plans/vanilla2_base_10b.md`) includes settling **only if** c or f beats b under the rules above.
+
+---
+
+## Addendum 1 (2026-11-03 ~20:50 PST): smoke tests and compute matching, before any 200M-token run
+
+- **20-step smoke of every arm through `scripts/sweep_queue.sh`: all pass** (no failure, no FAILED). Peak VRAM: c/f 11.6 GiB, d/e 11.9, R4 6.2.
+- Compiled-graph check: changing the K buffer changes the compiled model's output, and restoring it restores the output bit for bit, so the
+  controller acts through `torch.compile`.
+- **R4 compute matching** (600-step probes, median tok/s at the 450 W cap): arm c 179.1k; R4 with 2/3/4/6 repeats 394k / 328k / 281k / 234k
+  (time per token linear in the repeat count) → **9 repeats: measured 177.9k** (within 1% of c). Arm b = `SETTLE_REPEATS=9`.
+- Arm f runs at 93.6k tok/s: the controller's per-step diagnosis (two 8-step trajectories per layer, eager) roughly halves its speed. That's
+  the controller's own cost, reported as such. The model compute is the same as c.
+- Diagnostics write correctly (every 50 steps in the probes). First look at step 600 (not a result): at K = 1, R falls from ~0.85 to
+  ~0.5-0.6 over the 8 steps and λ_T ≈ +0.03; the controller kept the Lyapunov signal (sd 0.002 vs mean 0.017 at step 500, not noisy) and
+  lowered K to ~0.5-0.58 (λ_T ≈ +0.013).
+- Velocity clamp (arm d, 600 steps): it triggers on 0.5-4% of oscillator steps, rising during training, so d vs e is testable.
+- Expected GPU time for seed 1: b, c, d, e ≈ 19-20 min each, f ≈ 36 min → ≈ 2 h; stage 2 (seeds 2-3 for qualifying arms) up to ≈ 4 h more.
