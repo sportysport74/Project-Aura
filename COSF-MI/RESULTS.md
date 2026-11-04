@@ -4,6 +4,33 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-03 — Heartbeat retest on the fixed embedding (pre-registered; the heartbeat stays)
+
+- **Design** (`experiments/plans/heartbeat_retest.md`, 2026-11-02 09:56, before any result): `aura_std` (heartbeat on) vs `aura_std_off`
+  (`--heartbeat-strength 0`), s25 and m50, seeds 1-3, paired, 200M tokens. Rule: keep the heartbeat only if on beats off at m50 with paired
+  p < 0.05.
+- **Result:** off − on = **+0.041 at m50** (3.5952 ± 0.0072 vs 3.5542 ± 0.0035; paired t 9.55, **p = 0.011**), +0.053 at s25 (p < 0.001).
+  True R: 0.30 with the heartbeat, 0.007-0.009 without. **The heartbeat stays** in oscillator AURA.
+- Scope: this is within the oscillator backbone. Per the oscillator verdict below, the next backbone is vanilla2, where the heartbeat as
+  defined (on oscillator phases) doesn't apply. Carrying it over needs a phase-bearing module on vanilla2 (VISION.md §2).
+
+## 2026-11-03 — ft_v2 chat factuality on the 2.2B / 5B / 10B bases (2 seeds each)
+
+- Same fine-tune (fact-first ft_v2 set, seq 512, lr 1e-4, 1 epoch, replay) on each base, seeds 0 and 1; chat-format factuality (100
+  questions, 3 sampled seeds, Qwen2.5-7B grader); paired bootstrap over questions with the 2 seeds pooled.
+  `experiments/results/ft_v2_curve/{summary.md,compare.txt}`.
+
+| base | joined (sampled) | pieces (sampled) |
+|---|---|---|
+| 2.2B | 0.156 | 0.166 |
+| 5B | 0.180 | 0.183 |
+| 10B | **0.206** | **0.235** |
+
+- 10B − 2.2B: **+0.050 [+0.020, +0.079]** (joined), **+0.069 [+0.044, +0.095]** (pieces). 5B − 2.2B: +0.024 / +0.017 (CIs include 0).
+  10B − 5B: +0.026 [−0.003, +0.053] (joined), +0.053 [+0.029, +0.077] (pieces).
+- **The knowledge gain from more pretraining does show up in chat**, modestly: about +0.05 to +0.07 from 2.2B to 10B. Almost all of it is
+  PARTIAL credit (fully correct answers: 1-4%), and false claims stay at 39-49% of replies.
+
 ## 2026-11-03 — Oscillator projections vs a standard transformer (pre-registered; rule 2 fired)
 
 - **Design** (pre-registered in `experiments/plans/vanilla_embfix_decision.md`, 2026-11-02 04:22, addendum 04:30, both before any
@@ -30,7 +57,8 @@ entry's design changed after the data came in, it says so here.
 - **Embedding fix** (embfix vs the earlier heartbeat-on arm, same seeds): −0.33 / −0.36 / −0.37. The std-0.02 token embedding next to a
   std-0.5 positional encoding had been costing AURA more than the whole oscillator-vs-linear gap.
 - **Caveats:** one learning rate (6e-4, tuned on AURA) for both; the pre-registered lr check for vanilla2 (3e-4 / 1e-3, s25) is queued and
-  can only widen the gap. 200M tokens per run (under-trained at l100). The earlier `vanilla` arm (2026-10-31) was a broken recipe and is
+  can only widen the gap: **it did** (s25 seed 1: lr 3e-4 → 3.5785, 6e-4 → 3.4311, 1e-3 → 3.3820, so vanilla2 at 1e-3 is a further 0.05
+  ahead, and the best lr may be higher still, since 1e-3 is the edge of the grid). 200M tokens per run (under-trained at l100). The earlier `vanilla` arm (2026-10-31) was a broken recipe and is
   not a result.
 
 ## 2026-11-02 — 10B-token pretrain of l100 (104M): knowledge at 10B (pre-set criterion met)

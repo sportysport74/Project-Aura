@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-03 evening: chain DONE, GPU idle, nothing queued (user: nothing runs until approved).** ft_v2 chat factuality 2.2B → 5B → 10B:
+0.156 → 0.180 → 0.206 (joined), 0.166 → 0.183 → 0.235 (pieces); 10B − 2.2B +0.05 / +0.07, CIs exclude 0. Heartbeat retest: **stays**
+(m50 off − on +0.041, paired p 0.011). lr check s25 vanilla2: 3e-4 3.579 / 6e-4 3.431 / **1e-3 3.382** → per `experiments/plans/vanilla2_base_10b.md`
+the l100 confirmation (1e-3 vs 6e-4, 3,000 steps each) comes first; 1e-3 is the grid edge, so also try 1.5e-3/2e-3. Waiting for approval of
+the new-base plan.
+
 **2026-11-03: oscillator verdict (pre-registered rule 2 fired, RESULTS.md):** aura_std trails vanilla2 by +0.329 / +0.299 / +0.271
 (paired p < 0.001 at every size), at ~half the tok/s. Next designs: **vanilla2 backbone + oscillator ideas as modules that must each beat
 vanilla2** (VISION.md §0). GELU + GPT init make oscillator-AURA slightly worse (+0.015-0.019). Queue: ft_v2 curve (relaunched 04:58 after a

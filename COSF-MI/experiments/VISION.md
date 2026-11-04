@@ -48,6 +48,11 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
 
 ## 2. Phase synchronization (Kuramoto order) as a working mechanism
 
+> **2026-11-03:** on the fixed embedding, the heartbeat still helps oscillator AURA (off − on +0.041 at m50, p = 0.011; RESULTS.md).
+> But the backbone is moving to vanilla2, which has no phases. **Next test of this idea:** a phase-bearing module on vanilla2 (e.g. an
+> oscillator adapter on the residual stream, or phases read off pairs of hidden units) with the heartbeat on it, and it must beat vanilla2 on
+> val loss to stay.
+
 - **Vision:** synchrony between oscillators carries computation and binds representations.
 - **Current state:** the "heartbeat" is an auxiliary loss that keeps the Kuramoto order R of the live phases near 0.3 (`--heartbeat
   live`). It helps val loss vs no heartbeat. But the **control** arm, the same loss toward a random phase pattern (true R ≈ 0), gets
