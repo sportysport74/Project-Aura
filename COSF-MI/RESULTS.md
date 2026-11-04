@@ -10,7 +10,10 @@ entry's design changed after the data came in, it says so here.
   (`--heartbeat-strength 0`), s25 and m50, seeds 1-3, paired, 200M tokens. Rule: keep the heartbeat only if on beats off at m50 with paired
   p < 0.05.
 - **Result:** off − on = **+0.041 at m50** (3.5952 ± 0.0072 vs 3.5542 ± 0.0035; paired t 9.55, **p = 0.011**), +0.053 at s25 (p < 0.001).
-  True R: 0.30 with the heartbeat, 0.007-0.009 without. **The heartbeat stays** in oscillator AURA.
+  **A coherence loss helps oscillator AURA**, and per the rule the heartbeat stays.
+- **What this does not show:** that synchrony is the mechanism. True R is 0.30 with the heartbeat and 0.007-0.009 without, which shows the
+  loss does what it's built to do, nothing more. There's no `live_control` arm on the fixed embedding, and on the old embedding the control
+  (a coherence loss toward a random phase pattern) captured most of the heartbeat's gain.
 - Scope: this is within the oscillator backbone. Per the oscillator verdict below, the next backbone is vanilla2, where the heartbeat as
   defined (on oscillator phases) doesn't apply. Carrying it over needs a phase-bearing module on vanilla2 (VISION.md §2).
 
