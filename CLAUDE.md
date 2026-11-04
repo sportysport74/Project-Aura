@@ -109,7 +109,9 @@ Linux/WSL migration checklist. **Read this first; tick items off (with date) as 
 2.2B/5B/10B, then ft_v2 × 2 seeds). `scripts/supervise.sh` → `scripts/v2base_queue.sh`, checkpoints in `COSF-MI/checkpoints/v2base/`, results in
 `COSF-MI/experiments/results/v2base/`. Auto-resume as stage 2 (watchdog stops only; max 2; 2 faults within 3 h → stop for good; each fault logged to
 `checkpoints/v2base/CRASHES.md` with nvlddmkm events, GPU telemetry and the HWiNFO window). Every phase smoke-tested first: it caught a crash in
-`finetune_chat.py` on a checkpoint with no val loss (fixed). The supervisor's fault paths were tested with a fake queue. ETA ≈ 21 GPU-h.
+`finetune_chat.py` on a checkpoint with no val loss (fixed). The supervisor's fault paths were tested with a fake queue. ETA ≈ 21 GPU-h. Running at ~184k tok/s, 450 W.
+**Note:** WSL sets `$NAME` (the machine name, "pc"), which `supervise.sh` uses as its label, so this run's supervisor files are
+`COSF-MI/run_control/pc_supervisor.{state,log}` and `pc_attempt_*.log`. Cosmetic; rename the variable (e.g. `SUP_NAME`) after the run.
 
 **2026-11-04 01:24: settling experiment DONE** (RESULTS.md; `experiments/plans/settling_vanilla2.md`). s25 vanilla2 3.4311; settling c 3.4656
 (+0.035, p < 0.001, ~3× GPU time); R4 control 3.8461 (broken control: beating it means nothing); controller f 3.5760 (worse than c, p 0.006);
