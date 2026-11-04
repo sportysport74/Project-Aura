@@ -105,6 +105,14 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-03 19:30: l100 lr check DONE** (`COSF-MI/experiments/results/lr_check_l100/results.tsv`; vanilla2 l100, 3,000 steps, cosine to 0):
+**6e-4 3.769**, 1e-3 4.129, 1.5e-3 5.394, 2e-3 5.621 → the new base uses **6e-4** (s25's best was 1e-3; the optimum drops with width). 6e-4 is
+the low edge of this grid. RESULTS heartbeat wording corrected ("a coherence loss helps oscillator AURA"). **corpus_v2 raw shards deleted**
+(27 GB, user condition met): token counts match meta, max id 23999 < 24000, `</s>` count = document count (13,800,960), all 23 shards on the
+Hub at identical sizes; `data/corpus_v2/tok24k_ext/{SHA256SUMS,RAW_SOURCES.json}` (revisions + re-download via
+`scripts/corpus/download_ext.sh`). The WSL vdisk doesn't shrink by itself (C: still shows 104 GB free). **Settling experiment waits for the
+user's prompt** (it wasn't pasted).
+
 **2026-11-03 evening: chain DONE, GPU idle, nothing queued (user: nothing runs until approved).** ft_v2 chat factuality 2.2B → 5B → 10B:
 0.156 → 0.180 → 0.206 (joined), 0.166 → 0.183 → 0.235 (pieces); 10B − 2.2B +0.05 / +0.07, CIs exclude 0. Heartbeat retest: **stays**
 (m50 off − on +0.041, paired p 0.011). lr check s25 vanilla2: 3e-4 3.579 / 6e-4 3.431 / **1e-3 3.382** → per `experiments/plans/vanilla2_base_10b.md`
