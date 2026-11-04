@@ -110,6 +110,11 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
 
 ## 3b. Deliberation by settling
 
+> **Tested 2026-11-04 (pre-registered, s25, RESULTS.md):** within-token Kuramoto settling on vanilla2 settles into partial synchrony
+> (R ≈ 0.37, mildly contracting), but it makes the backbone worse (+0.035) at ~3× the compute. Holding it at the edge of chaos (the
+> criticality controller) is worse still (+0.11), and φ in the clamp makes no difference. What's left to try for "deliberation": settling that
+> is **across tokens** or **input-adaptive in depth** (halting), tested on a task that needs multi-step reasoning, not on val loss.
+
 The source doc for this section didn't come through (2026-10-31): this is written from Jon's notes plus AKOrN as published. Add the
 doc's own claims under "Claims" when it's available.
 

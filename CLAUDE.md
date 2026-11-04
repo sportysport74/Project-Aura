@@ -105,6 +105,11 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-04 01:24: settling experiment DONE** (RESULTS.md; `experiments/plans/settling_vanilla2.md`). s25 vanilla2 3.4311; settling c 3.4656
+(+0.035, p < 0.001, ~3× GPU time); R4 control 3.8461 (broken control: beating it means nothing); controller f 3.5760 (worse than c, p 0.006);
+clamp ÷φ vs ÷2 equal (3.4663 vs 3.4665). **Gate met on the letter, but settling hurts the backbone: recommended NOT in the new base.**
+New-base plan updated (`experiments/plans/vanilla2_base_10b.md`: lr 6e-4, no settling, ≈ 21 GPU-h). **Waiting for approval to launch.**
+
 **2026-11-03 19:30: l100 lr check DONE** (`COSF-MI/experiments/results/lr_check_l100/results.tsv`; vanilla2 l100, 3,000 steps, cosine to 0):
 **6e-4 3.769**, 1e-3 4.129, 1.5e-3 5.394, 2e-3 5.621 → the new base uses **6e-4** (s25's best was 1e-3; the optimum drops with width). 6e-4 is
 the low edge of this grid. RESULTS heartbeat wording corrected ("a coherence loss helps oscillator AURA"). **corpus_v2 raw shards deleted**

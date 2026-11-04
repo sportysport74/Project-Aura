@@ -4,6 +4,36 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-04 — Criticality-controlled settling on vanilla2, s25 (pre-registered; settling doesn't help the backbone)
+
+- **Design** (`experiments/plans/settling_vanilla2.md`, committed 2026-11-03 19:49, addendum with smoke tests and compute matching 20:36, both
+  before any 200M-token run): a within-token Kuramoto settling module after every block of vanilla2 s25 (T = 8 steps, symmetric low-rank J,
+  K = 1), lr 6e-4, 200M tokens. Seed 1 for every arm; seeds 2-3 for arms beating their comparison by > 0.005 (selection by script:
+  `experiments/results/settling/stage2_selection.md`). Paired by seed. `experiments/results/sweep/summary.md`.
+
+| arm | val (s25) | n | tok/s | GPU min / run |
+|---|---|---|---|---|
+| a. vanilla2 | **3.4311 ± 0.0004** | 3 | 588k | 6 |
+| b. R4 control (plain block × 9 repeats, compute-matched to c by measured speed) | 3.8461 ± 0.0085 | 3 | 157-170k | 20-21 |
+| c. settling, K = 1 | 3.4656 ± 0.0009 | 3 | 183-188k | 18-19 |
+| d. + clamp ÷ φ | 3.4663 | 1 | 184k | 19 |
+| e. + clamp ÷ 2 | 3.4665 | 1 | 175k | 20 |
+| f. + criticality controller | 3.5760 ± 0.0143 | 3 | 77-85k | 40-44 |
+
+- **Rule "settling counts only if c or f beats b": met on the letter.** c beats b by 0.381 (paired p < 0.001), f by 0.270 (p = 0.002). **But
+  the R4 control is itself broken**: it's 0.415 worse than plain vanilla2. Beating it says nothing in settling's favour, and **settling
+  makes the backbone worse: c − a = +0.035 (paired p < 0.001)** at ~3.2× the GPU time. At equal GPU time it's far behind: vanilla2 l100
+  trains in the same ~19 min and reaches 3.141.
+- **φ question (d vs e): no evidence φ is special.** 3.4663 vs 3.4665 at seed 1 (gap 0.0002, under the 0.005 threshold, so no stage 2).
+  The clamp fires on 2-3% of steps in layer 0 and ~0 in layers 5-7 by the end of training.
+- **Controller (f vs c): it doesn't count.** f is 0.110 worse (paired p = 0.006). It used the Lyapunov signal (not noisy: sd 0.0022 vs mean
+  0.0167 at step 500) and held λ_T ≈ 0.000 by raising K to 5-11 in most layers. Edge-of-chaos dynamics hurt here.
+- **Diagnostics (end of training, mean over layers):** c settles to a mildly contracting regime (λ_T ≈ −0.010) with **partial synchrony,
+  R 0.43 → 0.37 over the 8 steps** (not R → 1). The controller's arm sits at R ≈ 0.59.
+- **Caveats:** s25 only; one K, T, γ, β. The R4 control as specified (the same block repeated without dynamics) turned out to be a harmful
+  architecture, not a neutral compute sink, so a future compute-matched control should be a standard one (a wider or deeper vanilla2 at
+  equal GPU time).
+
 ## 2026-11-03 — Heartbeat retest on the fixed embedding (pre-registered; the heartbeat stays)
 
 - **Design** (`experiments/plans/heartbeat_retest.md`, 2026-11-02 09:56, before any result): `aura_std` (heartbeat on) vs `aura_std_off`

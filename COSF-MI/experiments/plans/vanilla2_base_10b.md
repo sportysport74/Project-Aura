@@ -1,4 +1,13 @@
-# Plan: the new AURA base = vanilla2 l100 on the same 10B tokens, then ft_v2 on top (PLANNED 2026-11-03, NOT RUN; needs approval)
+# Plan: the new AURA base = vanilla2 l100 on the same 10B tokens, then ft_v2 on top (UPDATED 2026-11-04, NOT RUN; needs approval)
+
+> **Updates 2026-11-04:**
+> - **lr: 6e-4** (l100 check, 3,000 steps: 6e-4 3.769, 1e-3 4.129, 1.5e-3 5.394, 2e-3 5.621). The lr confirmation step below is done; the
+>   continuation phase uses 3e-4.
+> - **Settling: not included (recommendation, user decides).** The pre-registered gate "settling only if c or f beats the R4 control" is met
+>   on the letter (c beats R4 by 0.38), but R4 turned out to be broken (0.415 worse than plain vanilla2), and settling makes vanilla2 worse
+>   (+0.035, p < 0.001) at ~3× the GPU time (RESULTS.md 2026-11-04). Putting it in the base would cost ~3× the 17 h for a worse model.
+> - **Heartbeat:** not applicable (no phases in vanilla2).
+> - With settling out, the time and disk estimates below stand: **≈ 21 GPU-h, ~17 GB** (now 130 GB free inside WSL after the shard cleanup).
 
 Why: the oscillator verdict (RESULTS.md 2026-11-03, rule 2) says the next designs use the standard backbone. This plan builds that
 base with the **exact protocol of the old 10B curve**, so the two curves compare point for point: same corpora, same data order, same
