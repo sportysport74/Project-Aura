@@ -114,6 +114,8 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
 > (R ≈ 0.37, mildly contracting), but it makes the backbone worse (+0.035) at ~3× the compute. Holding it at the edge of chaos (the
 > criticality controller) is worse still (+0.11), and φ in the clamp makes no difference. What's left to try for "deliberation": settling that
 > is **across tokens** or **input-adaptive in depth** (halting), tested on a task that needs multi-step reasoning, not on val loss.
+> **Retest rule (Jon, 2026-11-04): retest settling only with a zero-init readout (so the module starts as an exact no-op) and on a
+> multi-step reasoning task, not on val loss.**
 
 The source doc for this section didn't come through (2026-10-31): this is written from Jon's notes plus AKOrN as published. Add the
 doc's own claims under "Claims" when it's available.

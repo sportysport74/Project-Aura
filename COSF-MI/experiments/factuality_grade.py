@@ -83,11 +83,14 @@ def main():
     p.add_argument("dir", help="results dir holding replies.jsonl")
     p.add_argument("--max-reply-chars", type=int, default=1200)
     p.add_argument("--spot-seed", type=int, default=0, help="seed for the 20 spot-check rows")
+    p.add_argument("--limit", type=int, default=0, help="only the first N questions (dry runs; 0 = all)")
     args = p.parse_args()
     d = ROOT / args.dir
     qs = {q["id"]: q for q in map(json.loads, open(QUESTIONS))}
+    if args.limit:
+        qs = dict(list(qs.items())[:args.limit])
     ids = list(qs)
-    rows = [json.loads(line) for line in open(d / "replies.jsonl")]
+    rows = [r for r in map(json.loads, open(d / "replies.jsonl")) if r["id"] in qs]
     shift = {i: ids[(k + 37) % len(ids)] for k, i in enumerate(ids)}
     rows += [{"model": "control_reference", "encoding": "-", "decoding": "-", "seed": 0, "id": i,
               "reply": qs[i]["reference"]} for i in ids]

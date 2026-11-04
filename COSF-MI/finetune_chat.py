@@ -185,7 +185,8 @@ def main():
     model.load_state_dict(ckpt["model_state_dict"])
     if SEQ > ckpt["config"].max_seq_len:
         p.error(f"--seq-len {SEQ} exceeds the model's max_seq_len {ckpt['config'].max_seq_len}")
-    print(f"Base model: {args.checkpoint} (story val loss {ckpt['val_loss']:.4f})")
+    vl = ckpt.get('val_loss')  # None for a checkpoint saved at a --max-steps stop without a val pass
+    print(f"Base model: {args.checkpoint} (val loss {'n/a' if vl is None else f'{vl:.4f}'})")
     amp = torch.bfloat16 if args.precision == "bf16" else None
     if args.compile:
         model.compile()  # in place: state_dict keys stay free of the _orig_mod. prefix

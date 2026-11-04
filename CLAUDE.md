@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-04 ~03:50: new AURA base LAUNCHED** (user approved: vanilla2 l100, lr 6e-4, no settling, same 10B tokens and order, evals at
+2.2B/5B/10B, then ft_v2 × 2 seeds). `scripts/supervise.sh` → `scripts/v2base_queue.sh`, checkpoints in `COSF-MI/checkpoints/v2base/`, results in
+`COSF-MI/experiments/results/v2base/`. Auto-resume as stage 2 (watchdog stops only; max 2; 2 faults within 3 h → stop for good; each fault logged to
+`checkpoints/v2base/CRASHES.md` with nvlddmkm events, GPU telemetry and the HWiNFO window). Every phase smoke-tested first: it caught a crash in
+`finetune_chat.py` on a checkpoint with no val loss (fixed). The supervisor's fault paths were tested with a fake queue. ETA ≈ 21 GPU-h.
+
 **2026-11-04 01:24: settling experiment DONE** (RESULTS.md; `experiments/plans/settling_vanilla2.md`). s25 vanilla2 3.4311; settling c 3.4656
 (+0.035, p < 0.001, ~3× GPU time); R4 control 3.8461 (broken control: beating it means nothing); controller f 3.5760 (worse than c, p 0.006);
 clamp ÷φ vs ÷2 equal (3.4663 vs 3.4665). **Gate met on the letter, but settling hurts the backbone: recommended NOT in the new base.**

@@ -35,10 +35,12 @@ def main():
     p.add_argument("--out", default="experiments/results/factuality")
     p.add_argument("--samples", type=int, default=3)
     p.add_argument("--max-new", type=int, default=160)
+    p.add_argument("--limit", type=int, default=0, help="only the first N questions (dry runs; 0 = all)")
     args = p.parse_args()
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     qs = [json.loads(line) for line in open(QUESTIONS)]
+    qs = qs[:args.limit] if args.limit else qs
     prompts = [q["question"] for q in qs]
     with open(out_dir / "replies.jsonl", "w") as f:
         for spec in args.ckpts:
