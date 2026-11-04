@@ -83,6 +83,7 @@ def train_with_gentle_sleep(
     last_save = time.time()
 
     model.train()
+    settle_on = getattr(model.config, 'settle_mode', 'none') != 'none'
     current_epoch = 0
     dataset, batch_size = train_loader.dataset, train_loader.batch_size
     window_start, window_tokens = time.time(), 0
@@ -139,6 +140,11 @@ def train_with_gentle_sleep(
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # pre-clip norm, logged below
             optimizer.step()
             model.apply_julia_correction()  # damping moved out of forward()
+            if settle_on:  # settling module: criticality controller + per-step diagnostics (outside the compiled forward)
+                diag = model.settle_after_step(global_step + 1, bool(log_every) and (global_step + 1) % log_every == 0)
+                if diag:
+                    with open(Path(checkpoint_dir) / "settle_diag.jsonl", "a") as f:
+                        f.write(json.dumps(diag) + "\n")
             scheduler.step()
             optimizer.zero_grad()
 
@@ -422,6 +428,13 @@ def main():
     parser.add_argument('--ffn-activation', type=str, default='tanh', choices=['tanh', 'gelu'])
     parser.add_argument('--linear-init', type=str, default='default', choices=['default', 'gpt'],
                         help='gpt: GPT-2 init for plain nn.Linear projections (only with --projection linear)')
+    parser.add_argument('--settle', type=str, default='none', choices=['none', 'settle', 'repeat'],
+                        help='settling module after each block (models/settling.py); repeat = the R4 control')
+    parser.add_argument('--settle-T', type=int, default=8, help='settling steps per block')
+    parser.add_argument('--settle-K', type=float, default=1.0, help='coupling strength (fixed unless the controller is on)')
+    parser.add_argument('--settle-clamp', type=str, default='none', choices=['none', 'phi', 'two'])
+    parser.add_argument('--settle-controller', type=str, default='none', choices=['none', 'auto'])
+    parser.add_argument('--settle-repeats', type=int, default=1, help='R4 control: plain-block repeats (set for compute matching)')
     parser.add_argument('--deterministic', action='store_true',
                         help='torch.use_deterministic_algorithms (slow; for bitwise tests such as scripts/test_resume.sh)')
     parser.add_argument('--save-every-minutes', type=float, default=0,
@@ -578,6 +591,12 @@ def main():
         emb_scale=args.emb_scale,
         ffn_activation=args.ffn_activation,
         linear_init=args.linear_init,
+        settle_mode=args.settle,
+        settle_T=args.settle_T,
+        settle_K=args.settle_K,
+        settle_clamp=args.settle_clamp,
+        settle_controller=args.settle_controller,
+        settle_repeats=args.settle_repeats,
         heartbeat_strength=args.heartbeat_strength,
         heartbeat_target=args.heartbeat_target,
     )

@@ -171,6 +171,14 @@ class COSFOscillatorConfig:
     # ffn_activation 'gelu' replaces the block's tanh. linear_init 'gpt' initializes plain nn.Linear projections (projection
     # 'linear') GPT-2 style: N(0, 0.02), zero bias, the residual-output ones (attention out, ff2) scaled by 1/sqrt(2 * n_layers).
     emb_scale: str = 'none'
+    # Settling module after each block's FFN (models/settling.py; 2026-11-03, experiments/plans/settling_vanilla2.md).
+    # settle_mode 'none' (default) | 'settle' (T Kuramoto steps) | 'repeat' (R4 control: the plain block applied settle_repeats times).
+    settle_mode: str = 'none'
+    settle_T: int = 8
+    settle_K: float = 1.0
+    settle_clamp: str = 'none'        # 'none' | 'phi' | 'two'
+    settle_controller: str = 'none'   # 'none' | 'auto' (criticality controller adjusts K)
+    settle_repeats: int = 1
     ffn_activation: str = 'tanh'
     linear_init: str = 'default'
     heartbeat_strength: float = 0.01  # coupling_strength for the sync loss
@@ -1153,6 +1161,12 @@ class COSFOscillatorBlock(nn.Module):
             enable_terahertz_scaling=config.enable_terahertz_scaling,
         )
 
+        self.settle = None
+        if getattr(config, 'settle_mode', 'none') != 'none':
+            from cosf_mi.models.settling import SettlingModule
+            self.settle = SettlingModule(config.d_model, config.n_layers, T=config.settle_T, K=config.settle_K,
+                                         clamp=config.settle_clamp, mode=config.settle_mode, repeats=config.settle_repeats)
+
         if getattr(config, 'projection', 'oscillator') == 'linear':  # vanilla baseline
             self.ff1 = nn.Linear(config.d_model, config.d_ff)
             self.ff2 = nn.Linear(config.d_ff, config.d_model)
@@ -1176,6 +1190,9 @@ class COSFOscillatorBlock(nn.Module):
         # Feed-forward with residual
         ff_out = self.ff2(self.activation(self.ff1(self.ln2(x))))
         x = x + self.dropout(ff_out)
+
+        if getattr(self, 'settle', None) is not None:  # settling module (per token, causal by construction)
+            x = x + self.dropout(self.settle(x).to(x.dtype))
 
         return x
 
@@ -1453,6 +1470,34 @@ class COSFOscillatorTransformer(nn.Module):
             with torch.no_grad():
                 coherence = self.live_coherence()  # report the true R, not R_ψ
         return loss, coherence.detach()
+
+    def settle_after_step(self, step, log):
+        """Called by the trainer after each optimizer step: runs the criticality controller (if on) and, when `log`, returns the
+        per-settling-step diagnostics (R, var R, Lyapunov estimate) and K per module. None if the model has no settling modules."""
+        mods = [b.settle for b in self.blocks if getattr(b, 'settle', None) is not None]
+        if not mods:
+            return None
+        if getattr(self.config, 'settle_controller', 'none') == 'auto' and getattr(self, '_settle_ctrl', None) is None:
+            from cosf_mi.models.settling import CriticalityController
+            self._settle_ctrl = CriticalityController(mods)
+        ctrl = getattr(self, '_settle_ctrl', None)
+        decision = ctrl.after_step(step) if ctrl is not None else None
+        if not log:
+            return {'controller_decision': decision} if decision and decision['step'] == step else None
+        out = {'step': step, 'modules': []}
+        for i, m in enumerate(mods):
+            d = m.diagnose()
+            row = {'layer': i, 'K': float(m.K)}
+            if d is not None:
+                row.update(R=[round(v, 4) for v in d[0].tolist()], varR=[round(v, 6) for v in d[1].tolist()],
+                           lyap=[round(v, 4) for v in d[2].tolist()])
+            if m.last_clamp_frac is not None:
+                row['clamp_frac'] = round(float(m.last_clamp_frac), 4)
+            out['modules'].append(row)
+        if ctrl is not None:
+            out['controller_signal'] = ctrl.signal
+            out['controller_decision'] = ctrl.decision
+        return out
 
     def apply_julia_correction(self):
         """
