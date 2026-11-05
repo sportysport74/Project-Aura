@@ -230,23 +230,31 @@ def train_with_gentle_sleep(
         print(f"  Val loss: {val_loss:.4f}")
         print(f"  Val PPL: {math.exp(val_loss):.2f}")
 
-        # Phase metrics
-        metrics = model.get_phase_coherence_metrics()
-        print()
-        print("Phase metrics:")
-        print(f"  Coherence: {metrics['mean_coherence']:.4f}")
-        print(f"  Max velocity: {metrics['max_phase_velocity']:.2f}")
-        print(f"  Homeostatic drift: {metrics['homeostatic_drift']:.4f}")
-        print(f"  Refractory suppressions: {metrics['refractory_suppressions']}")
+        # Phase / chirality metrics: oscillator models only, and never fatal (2026-11-04: an AttributeError here on a vanilla2 model
+        # crashed the run after its full epoch, before the checkpoint save below)
+        if getattr(model.config, 'projection', 'oscillator') == 'linear':
+            print("Phase metrics: n/a (linear projections)")
+        else:
+            try:
+                metrics = model.get_phase_coherence_metrics()
+                print()
+                print("Phase metrics:")
+                print(f"  Coherence: {metrics['mean_coherence']:.4f}")
+                print(f"  Max velocity: {metrics['max_phase_velocity']:.2f}")
+                print(f"  Homeostatic drift: {metrics['homeostatic_drift']:.4f}")
+                print(f"  Refractory suppressions: {metrics['refractory_suppressions']}")
 
-        # Chirality metrics (if enabled)
-        if metrics.get('chirality_enabled', False):
-            print()
-            print("Chirality metrics:")
-            print(f"  Right-handed oscillators: {metrics['total_right_handed']}")
-            print(f"  Left-handed oscillators: {metrics['total_left_handed']}")
-            print(f"  Balance (right ratio): {metrics['chirality_balance']:.3f}")
-            print(f"  Total perspective flips: {metrics['total_chirality_flips']}")
+                # Chirality metrics (if enabled)
+                if metrics.get('chirality_enabled', False):
+                    print()
+                    print("Chirality metrics:")
+                    print(f"  Right-handed oscillators: {metrics['total_right_handed']}")
+                    print(f"  Left-handed oscillators: {metrics['total_left_handed']}")
+                    print(f"  Balance (right ratio): {metrics['chirality_balance']:.3f}")
+                    print(f"  Total perspective flips: {metrics['total_chirality_flips']}")
+
+            except Exception as e:  # diagnostics only
+                print(f"WARNING: phase metrics failed ({type(e).__name__}: {e}); continuing to the checkpoint save")
 
         # Save checkpoint
         if val_loss < best_val_loss:

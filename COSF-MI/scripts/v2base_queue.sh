@@ -23,9 +23,13 @@ OLD_FT=experiments/results/ft_v2_curve
 MODEL=(--model-size l100 --projection linear --emb-scale sqrt --ffn-activation gelu --linear-init gpt --seq-len 512 --batch-size 32
        --seed 1 --no-sleep --log-every 200 --save-every 100000000 --save-every-minutes 60)
 S5=140380; B5=30517
-LIM_A=(); LIM_B3=(); LIM_FT=(); LIM_EV=(); EVB=100000
+V1=data/corpus_v1/tok24k_v2; EXTC=data/corpus_v2/tok24k_ext
+LIM_FT=(); LIM_EV=(); EVB=100000
 if [ "$SMOKE" = 1 ]; then
-  S5=20; B5=20; LIM_A=(--max-steps 20 --save-final); LIM_B3=(--max-steps 60 --save-final --eval-batches 5); LIM_FT=(--max-steps 20); LIM_EV=(--limit 2 --samples 1); EVB=5
+  # Tiny slices of both corpora (data/smoke/, 40 and 80 steps), so A and B3 run COMPLETE epochs and the end-of-epoch path (val, metrics,
+  # best_model save, epoch-end state) is exercised: a --max-steps stop skips it (that gap let the 2026-11-04 epoch-end crash through)
+  V1=data/smoke/tok24k_v2_tiny; EXTC=data/smoke/tok24k_ext_tiny
+  S5=20; B5=20; LIM_FT=(--max-steps 20); LIM_EV=(--limit 2 --samples 1); EVB=5
 fi
 mkdir -p "$ROOT"/{A,main,branch5b,ft} "$RES" run_control
 fail() { mark_failed "v2base: $*"; echo "=== $(date -Iseconds) STOPPED: $*"; exit 1; }
@@ -50,13 +54,13 @@ ckpt_of() { if [ -f "$1/best_model.pt" ]; then echo "$1/best_model.pt"; else ech
 # --- A: 2.2B base ---------------------------------------------------------------------------------------------------------------
 if [ ! -f "$ROOT/A/DONE" ]; then
   echo "=== $(date -Iseconds) A: base on tok24k_v2 -> $ROOT/A"
-  run_train "$ROOT/A/train.log" "${MODEL[@]}" --corpus data/corpus_v1/tok24k_v2 --lr 6e-4 --warmup 2000 --epochs 1 --resume auto \
-    --eval-batches "$EVB" "${LIM_A[@]}" --checkpoint-dir "$ROOT/A"
-  [ -f "$(ckpt_of "$ROOT/A")" ] || fail "phase A produced no checkpoint"
+  run_train "$ROOT/A/train.log" "${MODEL[@]}" --corpus "$V1" --lr 6e-4 --warmup 2000 --epochs 1 --resume auto \
+    --checkpoint-dir "$ROOT/A"
+  [ -f "$ROOT/A/best_model.pt" ] || fail "phase A produced no best_model.pt (end-of-epoch save)"
   touch "$ROOT/A/DONE"
 fi
 B2_2=$(ckpt_of "$ROOT/A")
-EXT=(--corpus data/corpus_v2/tok24k_ext --val-corpus data/corpus_v1/tok24k_v2 --lr 3e-4 --warmup 2000 --schedule wsd --decay-frac 0.1 --epochs 1)
+EXT=(--corpus "$EXTC" --val-corpus "$V1" --lr 3e-4 --warmup 2000 --schedule wsd --decay-frac 0.1 --epochs 1)
 
 # --- B1: to the stable state at S5 ------------------------------------------------------------------------------------------------
 if [ ! -f "$ROOT/main/stable_step$S5.pt" ]; then
@@ -76,8 +80,8 @@ fi
 # --- B3: main to 10B --------------------------------------------------------------------------------------------------------------
 if [ ! -f "$ROOT/main/DONE" ]; then
   echo "=== $(date -Iseconds) B3: main run to the end of the epoch -> $ROOT/main"
-  run_train "$ROOT/main/train.log" "${MODEL[@]}" "${EXT[@]}" --init-from "$B2_2" --resume auto "${LIM_B3[@]}" --checkpoint-dir "$ROOT/main"
-  [ -f "$(ckpt_of "$ROOT/main")" ] || fail "phase B3 produced no checkpoint"
+  run_train "$ROOT/main/train.log" "${MODEL[@]}" "${EXT[@]}" --init-from "$B2_2" --resume auto --checkpoint-dir "$ROOT/main"
+  [ -f "$ROOT/main/best_model.pt" ] || fail "phase B3 produced no best_model.pt (end-of-epoch save)"
   touch "$ROOT/main/DONE"
 fi
 P2=$B2_2; P5=$ROOT/branch5b/final_model.pt; P10=$(ckpt_of "$ROOT/main")

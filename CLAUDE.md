@@ -110,6 +110,10 @@ Linux/WSL migration checklist. **Read this first; tick items off (with date) as 
 `COSF-MI/experiments/results/v2base/`. Auto-resume as stage 2 (watchdog stops only; max 2; 2 faults within 3 h → stop for good; each fault logged to
 `checkpoints/v2base/CRASHES.md` with nvlddmkm events, GPU telemetry and the HWiNFO window). Every phase smoke-tested first: it caught a crash in
 `finetune_chat.py` on a checkpoint with no val loss (fixed). The supervisor's fault paths were tested with a fake queue. ETA ≈ 21 GPU-h. Running at ~184k tok/s, 450 W.
+**2026-11-04 07:14: phase A crashed at its epoch end** (after val **2.6442** at 2.2B; old AURA 2.8769) in the oscillator phase-metrics printout,
+which vanilla2 lacks, before the best_model save. Not a GPU fault: the supervisor stopped and wrote FAILED (correct). The smoke test had missed it
+because `--max-steps` stops skip the epoch-end path. Fixed: metrics skipped for linear models and never fatal; SMOKE mode now uses tiny corpus slices
+(`data/smoke/`) so A and B3 run complete epochs. Full smoke passed, then resumed from latest.pt step 118,760 (~25 min of re-training).
 **Note:** WSL sets `$NAME` (the machine name, "pc"), which `supervise.sh` uses as its label, so this run's supervisor files are
 `COSF-MI/run_control/pc_supervisor.{state,log}` and `pc_attempt_*.log`. Cosmetic; rename the variable (e.g. `SUP_NAME`) after the run.
 
