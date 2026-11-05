@@ -4,6 +4,32 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-05 — New AURA base: vanilla2 l100 on the same 10B tokens (vs the old oscillator curve)
+
+- **Design** (`experiments/plans/vanilla2_base_10b.md`, approved 2026-11-04): vanilla2 l100 (103.5M; linear projections, embedding × √d, GELU,
+  GPT init), lr 6e-4, the old curve's exact protocol and data order (2.2B cosine; WSD continuation at 3e-4 with a 5B decay branch and the 10B
+  final decay). Same evals at every point. One training run per point (CIs are over the 100 questions). Factuality: ft_v2 × 2 seeds per point,
+  pooled. `experiments/results/v2base/`; the old curve in `experiments/results/pretrain_10b/` and `ft_v2_curve/`.
+
+| point | v1 val, old → **new** | knowledge PMI, old → **new** (new − old, 95% CI) | battery ALL, old → **new** | chat factuality after ft_v2 (joined), old → **new** (new − old) |
+|---|---|---|---|---|
+| 2.2B | 2.8769 → **2.6442** | 0.316 → **0.447** (+0.131 [+0.106, +0.156]) | 53% → **67%** | 0.156 → **0.246** (+0.090 [+0.063, +0.118]) |
+| 5B | 2.7735 → **2.5791** | 0.357 → **0.434** (+0.077 [+0.056, +0.098]) | 69% → **74%** | 0.180 → **0.260** (+0.080 [+0.045, +0.115]) |
+| 10B | 2.6802 → **2.5180** | 0.383 → **0.448** (+0.065 [+0.045, +0.086]) | 74% → **76%** | 0.206 → **0.302** (+0.096 [+0.062, +0.132]) |
+
+(Factuality, pieces encoding: new − old +0.090 / +0.102 / +0.081, all CIs above 0. Fully correct answers: new 3-10% vs old 1-4%.)
+
+- **The new base is better at every point on every measure**: val −0.16 to −0.23, knowledge probe +0.07 to +0.13, chat factuality +0.08 to
+  +0.10, battery +2 to +14 points, at ~2× the training speed (17 h for the 10B pretrain vs ~27.5 h).
+- **Pre-set criterion (10B vs 5B on the probe, CI excluding 0): PASS, narrowly**: +0.014 [+0.002, +0.027].
+- **But on the new base the probe barely moves with more tokens**: 2.2B 0.447 → 5B 0.434 → 10B 0.448 (10B − 2.2B: +0.002 [−0.017, +0.020]).
+  Chat factuality after fine-tuning does rise: 2.2B → 10B **+0.056 [+0.023, +0.089]** (joined), +0.060 [+0.029, +0.093] (pieces); val loss falls
+  steadily. One possible confound: the 2.2B point is the only one annealed from the 6e-4 peak (cosine), the others from the 3e-4 WSD
+  continuation, and the probe may reward the sharper anneal. So the probe looks saturated or schedule-sensitive for this model; **chat factuality
+  after the same fine-tune is the better knowledge curve** here.
+- Run notes: no GPU faults (0/2 auto-resumes). Phase A crashed once at its epoch end on a code bug (oscillator-only metrics); fixed, resumed
+  from the step-118,760 state, and the re-run reached the identical val loss (2.6442).
+
 ## 2026-11-04 — Criticality-controlled settling on vanilla2, s25 (pre-registered; settling doesn't help the backbone)
 
 - **Design** (`experiments/plans/settling_vanilla2.md`, committed 2026-11-03 19:49, addendum with smoke tests and compute matching 20:36, both

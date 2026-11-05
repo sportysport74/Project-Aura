@@ -7,7 +7,7 @@
 #   - each fault: append the Windows nvlddmkm/WHEA events, the trainer's GPU telemetry (<log>.gpu.csv) and the HWiNFO 10-min window
 #     (experiments/hwinfo_fault_window.py on D:\fatba\Documents\train_hwinfo*) to $WATCH/CRASHES.md.
 # Env: QUEUE (command, default "bash scripts/v2base_queue.sh"), WATCH (dir with the run's train logs, default checkpoints/v2base),
-# DONE_MARK (default V2BASE_DONE), NAME (state/log name, default v2base), SUP_WAIT. Counters persist in run_control/<NAME>_supervisor.state.
+# DONE_MARK (default V2BASE_DONE), SUP_NAME (state/log name, default v2base; not NAME, which WSL sets to the host name), SUP_WAIT. Counters persist in run_control/<NAME>_supervisor.state.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 source scripts/lib_train.sh
@@ -15,7 +15,7 @@ PY=.venv/bin/python
 QUEUE=${QUEUE:-bash scripts/v2base_queue.sh}
 WATCH=${WATCH:-checkpoints/v2base}
 DONE_MARK=${DONE_MARK:-V2BASE_DONE}
-NAME=${NAME:-v2base}
+NAME=${SUP_NAME:-v2base}
 SUP_WAIT=${SUP_WAIT:-300}
 STATE=run_control/${NAME}_supervisor.state
 LOG=run_control/${NAME}_supervisor.log

@@ -1,0 +1,16 @@
+{
+ "a": "ft2_b10_s0,ft2_b10_s1",
+ "b": "v2b_b10_s0,v2b_b10_s1",
+ "encoding": "pieces",
+ "decoding": "sampled_rep",
+ "questions": 100,
+ "score_a": 0.235,
+ "score_b": 0.3158,
+ "gain": 0.0808,
+ "ci95": [
+  0.0467,
+  0.1158
+ ],
+ "min_gain": 0.0,
+ "gate": "PASS"
+}

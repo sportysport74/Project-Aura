@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-05 09:28: new AURA base DONE (no faults; RESULTS.md).** `COSF-MI/checkpoints/v2base/{A,branch5b,main}` = 2.2B / 5B / 10B; fine-tunes in
+`checkpoints/v2base/ft/`. Better than the old oscillator curve everywhere: val 2.644 / 2.579 / 2.518 (old 2.877 / 2.774 / 2.680); chat factuality
+after ft_v2 0.246 / 0.260 / 0.302 (old 0.156 / 0.180 / 0.206); probe +0.07 to +0.13. The probe is ~flat across 2.2B→10B on the new base (10B vs 5B
++0.014, criterion passes narrowly), so use chat factuality as the knowledge curve. **Best chat model now: `checkpoints/v2base/ft/b10_s1`** (factuality
+0.310 joined / 0.327 pieces), not yet the default in `chat_with_aura.py` (user decision). `supervise.sh` now uses `SUP_NAME` (was `NAME`, which WSL sets).
+
 **2026-11-04 ~03:50: new AURA base LAUNCHED** (user approved: vanilla2 l100, lr 6e-4, no settling, same 10B tokens and order, evals at
 2.2B/5B/10B, then ft_v2 × 2 seeds). `scripts/supervise.sh` → `scripts/v2base_queue.sh`, checkpoints in `COSF-MI/checkpoints/v2base/`, results in
 `COSF-MI/experiments/results/v2base/`. Auto-resume as stage 2 (watchdog stops only; max 2; 2 faults within 3 h → stop for good; each fault logged to
