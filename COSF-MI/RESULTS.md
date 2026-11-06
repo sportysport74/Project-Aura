@@ -4,6 +4,18 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-06 — Probe confound check and l100 lr check at 3e-4 (pre-registered, `experiments/plans/overnight_1105.md`)
+
+- **Probe confound check.** From the new base's 4.5B stable state, phase A's schedule re-applied (warmup to 6e-4, cosine to 0 over 2.2B unseen
+  tokens; endpoint 6.7B tokens): v1 val **2.5490** (5B 2.5791, 10B 2.5180). Knowledge probe, re-scored in the same run
+  (`experiments/results/v2base_anneal/`): anneal **0.430** vs 10B 0.448 (anneal − 10B **−0.019 [−0.029, −0.008]**), vs 2.2B 0.447 (−0.017
+  [−0.033, −0.001]), vs 5B 0.434 (−0.004, CI includes 0).
+  **Rule (written before running): the anneal point does not beat the 10B point, so the flat curve is not the schedule.** It's consistent
+  with the probe being saturated for this model: more tokens lower val loss, but the probe stays at ~0.43-0.45 whatever the schedule. Chat
+  factuality after fine-tuning (which does rise 2.2B → 10B) remains the knowledge curve to use. One run; CIs over questions.
+- **l100 lr check at 3e-4** (vanilla2 l100, 3,000 steps, same protocol): **4.0056** vs 6e-4 3.7687. 3e-4 is clearly worse (rule: better only if
+  lower by > 0.01), so **6e-4 stays**; with 1e-3 at 4.1289, the optimum is between 3e-4 and 1e-3, near 6e-4.
+
 ## 2026-11-05 — New AURA base: vanilla2 l100 on the same 10B tokens (vs the old oscillator curve)
 
 - **Design** (`experiments/plans/vanilla2_base_10b.md`, approved 2026-11-04): vanilla2 l100 (103.5M; linear projections, embedding × √d, GELU,
