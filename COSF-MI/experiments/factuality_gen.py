@@ -12,6 +12,7 @@ Usage (from COSF-MI/):
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -36,13 +37,39 @@ def main():
     p.add_argument("--samples", type=int, default=3)
     p.add_argument("--max-new", type=int, default=160)
     p.add_argument("--limit", type=int, default=0, help="only the first N questions (dry runs; 0 = all)")
+    p.add_argument("--store", default=None, help="retrieval store dir (data/retrieval/corpus or .../wiki): top-k sources in the prompt")
+    p.add_argument("--k", type=int, default=3)
+    p.add_argument("--oracle", action="store_true", help="the question's reference answer as source [1] (upper bound)")
+    p.add_argument("--append", action="store_true", help="append to replies.jsonl instead of overwriting (several arms, one grading run)")
     args = p.parse_args()
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     qs = [json.loads(line) for line in open(QUESTIONS)]
     qs = qs[:args.limit] if args.limit else qs
-    prompts = [q["question"] for q in qs]
-    with open(out_dir / "replies.jsonl", "w") as f:
+    sources = [[] for _ in qs]
+    if args.store or args.oracle:
+        from cosf_mi.retrieval import Store, format_prompt
+        if args.store:
+            st = Store(ROOT / args.store)
+            sources = st.search([q["question"] for q in qs], k=args.k)
+            del st
+            torch.cuda.empty_cache()
+        if args.oracle:
+            sources = [[{"id": -1, "source": "oracle", "title": "", "text": q["reference"]}] for q in qs]
+        prompts = [format_prompt(q["question"], ps) for q, ps in zip(qs, sources)]
+    else:
+        prompts = [q["question"] for q in qs]
+    from cosf_mi.retrieval import tag_answer
+
+    def copies(reply, ps, n=8):  # does the answer copy >= n consecutive words of one of its sources?
+        w = re.findall(r"[a-z0-9']+", reply.lower())
+        grams = {" ".join(w[i:i + n]) for i in range(len(w) - n + 1)}
+        for x in ps:
+            xw = re.findall(r"[a-z0-9']+", x["text"].lower())
+            if grams & {" ".join(xw[i:i + n]) for i in range(len(xw) - n + 1)}:
+                return True
+        return False
+    with open(out_dir / "replies.jsonl", "a" if args.append else "w") as f:
         for spec in args.ckpts:
             name, path = spec.split("=", 1)
             ckpt = torch.load(ROOT / path, map_location="cpu", weights_only=False)
@@ -57,9 +84,13 @@ def main():
                     for s in range(1, args.samples + 1)]
                 for mode, seed, kw in runs:
                     replies = ab_eval.generate(model, tok, prompts, max_new=args.max_new, bs=20, joined=enc == "joined", **kw)
-                    for q, (reply, ended) in zip(qs, replies):
+                    for q, ps, (reply, ended) in zip(qs, sources, replies):
+                        # "reply" is what the grader sees; "reply_shown" carries the "(Wikipedia)" tag (pre-registered rule)
                         f.write(json.dumps({"model": name, "checkpoint": path, "encoding": enc, "decoding": mode,
-                                            "seed": seed, "id": q["id"], "reply": reply, "ended": ended},
+                                            "seed": seed, "id": q["id"], "reply": reply, "ended": ended,
+                                            "reply_shown": tag_answer(reply, q["question"], ps),
+                                            "copies8": copies(reply, ps),
+                                            "sources": [{"id": x["id"], "source": x["source"], "title": x.get("title", "")} for x in ps]},
                                            ensure_ascii=False) + "\n")
                     f.flush()
                     print(f"[{name}] {enc} {mode} seed {seed}: done", flush=True)
