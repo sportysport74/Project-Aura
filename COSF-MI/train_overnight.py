@@ -459,6 +459,10 @@ def main():
     parser.add_argument('--schedule', type=str, default='cosine', choices=['cosine', 'wsd'],
                         help='cosine (default) or wsd: linear warmup, constant, then linear decay to 0 at the end')
     parser.add_argument('--decay-frac', type=float, default=0.1, help='wsd: decay over the last fraction of the steps')
+    parser.add_argument('--branch-cosine-steps', type=int, default=0,
+                        help='with --resume-state: replace the schedule by warmup (--warmup) to --lr, then cosine to 0 over N steps, '
+                             'counted from the resumed step (a phase-A-style anneal off a stable checkpoint)')
+    parser.add_argument('--branch-start-step', type=int, default=0, help='the step the cosine branch starts at (default: the resumed step)')
     parser.add_argument('--decay-start-step', type=int, default=0,
                         help='wsd: start the decay at this step instead (e.g. a branch off a stable-phase snapshot)')
     parser.add_argument('--val-corpus', type=str, default=None,
@@ -722,6 +726,18 @@ def main():
         print(f"  epoch {start_epoch + 1}, batch {skip_batches}, step {global_step}, "
               f"lr={optimizer.param_groups[0]['lr']:.2e}, best val_loss={best_val_loss:.4f}, "
               f"RNG {'restored' if rng else 'not in file (older state)'}, saved {state.get('saved_at', '?')}")
+        if args.branch_cosine_steps:
+            # Cosine branch off a resumed state (2026-11-05, probe confound check): warmup to --lr over --warmup steps counted from
+            # the resumed step S, then cosine to 0 over --branch-cosine-steps (phase A's schedule shape, re-applied from S). The
+            # resumed scheduler's base lr (e.g. 3e-4) is replaced by --lr.
+            S = args.branch_start_step or global_step  # explicit start, so a resume mid-branch keeps the same schedule
+            L, W, LR = args.branch_cosine_steps, max(1, args.warmup), args.lr
+            for g in optimizer.param_groups:
+                g['initial_lr'] = LR
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer, lambda s: min(1.0, (s - S + 1) / W) * 0.5 * (1 + math.cos(math.pi * min(1.0, (s - S) / L))),
+                last_epoch=global_step - 1)
+            print(f"  Branch schedule: warmup {W} to {LR:g}, cosine to 0 over {L:,} steps (steps {S:,} -> {S + L:,})")
         print()
     elif args.resume:
         print(f"Resuming from checkpoint: {args.resume}")

@@ -13,7 +13,7 @@ RES=${RES:-experiments/results/lr_check_l100}
 mkdir -p "$ROOT" "$RES" run_control
 echo "bash scripts/lr_check_l100.sh" > run_control/LAST_QUEUE
 [ -f "$RES/results.tsv" ] || printf "lr\tval_loss\tmedian_tok_s\tpeak_gib\n" > "$RES/results.tsv"
-for lr in 6e-4 1e-3 1.5e-3 2e-3; do
+for lr in ${LRS:-6e-4 1e-3 1.5e-3 2e-3}; do
   out=$ROOT/lr_$lr
   if [ -f "$out/final_model.pt" ]; then echo "=== skip lr $lr (done)"; continue; fi
   mkdir -p "$out"
