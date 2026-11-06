@@ -4,6 +4,7 @@
 mark_failed() {
   mkdir -p run_control
   { echo "time: $(date -Iseconds)"; echo "script: ${0##*/}"; echo "reason: $*"; } > run_control/FAILED
+  bash scripts/notify.sh "STOPPED (${0##*/}): $(echo "$*" | cut -c1-150)" 5   # phone alert (ntfy; no-op without a topic)
 }
 # Shared by the queue scripts (source it). run_train LOG ARGS...: runs train_overnight.py, appending to LOG.
 #   exit 0  -> returns
