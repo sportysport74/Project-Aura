@@ -105,6 +105,13 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-06 14:29: retrieval experiment LAUNCHED** (approved; pre-registered `COSF-MI/experiments/plans/retrieval_prereg.md`, committed
+08:34 before any code ran). Corpus store (Cosmopedia + FineWeb-Edu, ≤ 6M passages) for training and eval; **Simple English Wikipedia (CC BY-SA)
+is an inference-only store**, never in training data; answers that use a Wikipedia passage get "(Wikipedia)". Gate: corpus recall@3 ≥ 0.6. Chain
+`scripts/retrieval_queue.sh` (smoke-tested end to end), results in `COSF-MI/experiments/results/retrieval/`. ETA ~5 h.
+**Phone alerts:** `scripts/notify.sh` posts to ntfy.sh; the random topic name is in `COSF-MI/run_control/ntfy_topic` (gitignored; **never commit it
+or write it in a tracked file**: anyone with the name can read it). `mark_failed` alerts automatically; queues alert at their end.
+
 **2026-11-06 02:52: overnight DONE (RESULTS.md).** Probe confound: a 6e-4 cosine anneal from the 4.5B state (6.7B tokens, val 2.549) scores
 0.430 on the probe, below 10B's 0.448 → the flat probe is not the schedule (saturation-consistent); keep chat factuality as the knowledge
 curve. lr 3e-4 at l100: 4.006 vs 6e-4 3.769 → 6e-4 stays. Retrieval plan written (`experiments/plans/retrieval.md`), waiting for approval.
