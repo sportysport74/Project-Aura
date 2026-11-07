@@ -374,7 +374,7 @@ def main():
 
     # Model args
     parser.add_argument('--model-size', type=str, default='tiny',
-                        choices=['tiny', 'mid', 'big', 'small', 'medium', 's25', 'm50', 'l100'],
+                        choices=['tiny', 'mid', 'big', 'small', 'medium', 's25', 'm50', 'l100', 'x330'],
                         help='Model size')
 
     # Training args
@@ -531,6 +531,8 @@ def main():
         's25': {'d_model': 384, 'n_layers': 8, 'n_heads': 6, 'd_ff': 1536},     # 23.5M
         'm50': {'d_model': 512, 'n_layers': 12, 'n_heads': 8, 'd_ff': 2048},    # 50.2M
         'l100': {'d_model': 768, 'n_layers': 12, 'n_heads': 12, 'd_ff': 3072},  # 103.7M
+        # Aura v3 base candidates (plan 2026-11-07, experiments/plans/aura_v3_base.md); head dim 64, d_ff = 4·d_model
+        'x330': {'d_model': 1024, 'n_layers': 24, 'n_heads': 16, 'd_ff': 4096},  # ~327M
     }
 
     model_config = model_configs[args.model_size]

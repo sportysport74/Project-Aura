@@ -1,5 +1,9 @@
 # COSF-MI: Phase Oscillator Neural Networks
 
+> **Status (2026-11-07):** this README describes the original oscillator design, which lost to a standard transformer in a pre-registered
+> comparison. For where the project stands now, see [`PROGRESS.md`](PROGRESS.md); measured results are in [`COSF-MI/RESULTS.md`](COSF-MI/RESULTS.md).
+
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)

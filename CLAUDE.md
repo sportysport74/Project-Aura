@@ -105,6 +105,10 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-07 evening: Aura v3 base PLANNED, not run (`COSF-MI/experiments/plans/aura_v3_base.md`; waiting for Jon).** x330 (d1024 L24, 326.9M,
+context 1024) measured at 70k tok/s probe (≈ 61k sustained), 20.9 GiB at batch 16 × 1024; 15B tokens (10B on disk + ~5B new shards) ≈ 86 GPU-h
+total, scaling + lr checks (~5 h) first. Only code change so far: the `x330` size entry. **At-a-glance status: `PROGRESS.md` (repo root).**
+
 **2026-11-07 ~12:30: retrieval gate DONE (RESULTS.md; `experiments/plans/retrieval_gate.md`).** G1 passed (off-topic inappropriate 42% →
 27%, factuality unchanged) → **on by default in `chat_with_aura.py --store`** (`--no-gate` to turn off), plus the previous-turn history (multi-turn
 step A: 0.090 → 0.353). Open issues: "hi"/"lol" get "I'm not sure what you mean" (garble check runs before chit-chat; a reorder needs its own
