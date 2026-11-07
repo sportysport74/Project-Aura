@@ -668,6 +668,11 @@ Open:
   unique params. The `aura_chat_distill` checkpoint has 33,727,690 (an older config, +241,866), and counting its tied 16,000×512 matrix
   twice gives exactly 41.9M, the Known-state figure. Known state should say "33.5M unique (41.9M counted the tied embedding twice)".
 
+### Next-base checklist (things the next pretrain must include)
+- **Context window ≥ 1024 tokens** (Jon, 2026-11-07). At 512, question + 3 sources (232 tokens median, 342 max) + a 160-token answer leaves
+  ~120 tokens median and ~10 worst case, so chat history can't sit next to retrieval (`experiments/plans/retrieval_gate.md`).
+- lr: 6e-4 was the low edge of the l100 grid, 3e-4 was worse (RESULTS 2026-11-06); re-check if the width or the batch changes.
+
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
 - **Plan for possible commercial use** (decided 2026-10-28): every new dataset, teacher and model choice must allow commercial use.

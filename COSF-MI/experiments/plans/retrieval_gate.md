@@ -1,69 +1,119 @@
-# Plan (DRAFT, not built, awaiting approval): retrieval confidence gate, chit-chat routing, multi-turn (written 2026-11-07)
+# Pre-registered: retrieval confidence gate, two gate replies, chit-chat routing, answer entropy, multi-turn step A (2026-11-07)
 
-**Why (Jon's terminal test of `checkpoints/rag/s0 --store corpus`):** earthquakes good; garbled input → confident falsehood; "lol" → a fact essay;
-no memory between turns. Cause: chat store mode always retrieves and always shows the top 3 to the RAG model, which was trained only on
-single-turn questions where sources were present (20% random, but the question was always a real question).
+Approved by Jon 2026-11-07 with three changes (two gate replies scored separately; answer entropy logged as a diagnostic; context ≥ 1024 on the
+next-base checklist). **Frozen in this commit, before any gate code is written.** Anything changed after this commit is listed at the end under
+"Changes after freezing", with the reason.
+
+**Why (Jon's terminal test of `checkpoints/rag/s0 --store corpus`):** earthquakes good; garbled input → a confident falsehood; "lol" → a fact
+essay; no memory between turns. Chat store mode always retrieves and always shows the top 3 sources to the RAG model, which was trained only on
+single-turn real questions that had sources.
 
 **Measured before writing this (no new code):**
 - bge-small top-1 cosine similarity on the 100 factuality questions (corpus store): min 0.756, p10 0.794, median 0.847. The scores are
-  compressed (a known bge trait), so it's **unknown whether junk like "lol" or "asdf kjh" scores clearly lower.** That's the first thing to
-  measure, and the gate is only built if it separates (gate 0 below).
-- Prompt budget: the question + 3 sources (75 words each) is **232 tokens median, 342 max** (24k tokenizer). With 160 reply tokens in a
-  512 window, that leaves ~120 tokens median and ~10 worst case. **2-3 turns of history don't fit next to 3 sources** (one turn ≈ 100 tokens).
+  compressed, so it's unknown whether junk scores clearly lower; gate 0 below measures that before anything is built on it.
+- Prompt budget: question + 3 sources (75 words each) = 232 tokens median, 342 max (24k tokenizer). With 160 reply tokens in the 512 window,
+  ~120 tokens are left on average and ~10 in the worst case. One turn of history ≈ 100 tokens.
+- **Correction to the draft:** ft_v2's "chat" category is mostly fact-seeking ("Hey Aura, how do firefighters save animals in big fires?"), not
+  chit-chat, so the draft's chat-vs-explain classifier would not detect "lol". The chit-chat detector below uses real chit-chat examples instead.
 
-## Part 1: `--show-sources` and logging (tooling; no eval)
-- `--show-sources` prints the 3 sources (title or store id, similarity, first ~20 words) under each answer.
-- Every turn appends to `chat_logs/<date>.jsonl` (gitignored, local only): message, top-1 similarity, gate decision, which model answered, reply.
-  Your real chats become the data for tuning the gate later (never the test set).
+## Part 1: tooling (no eval)
+- `chat_with_aura.py --show-sources`: prints each source (store id or Wikipedia title, similarity, first ~20 words) under the answer.
+- Every turn appends to `chat_logs/<date>.jsonl` (gitignored, local only): message, top-1 similarity, the gate's signals and decision, which model
+  answered, the answer's mean token entropy, the reply. These logs are never used as a test set.
 
-## Part 2: confidence gate + chit-chat routing (pre-registered)
-**Data (built before any tuning; never the 100 factuality questions):**
-- *On-topic held-out:* the ft_rag **val** prompts (explain + oasst2, ~2,200), which the RAG model never trained on. Split 50/50 into tune / test.
-- *Off-topic set, 400 messages, split 200 tune / 200 test (different seeds):* garbled (keyboard mash, shuffled letters of real questions,
-  word salad from real questions), chit-chat ("lol", "hi", "thanks!", "that's cool", "I'm bored"), and unanswerable or real-time questions
-  ("what's the weather now", "who won last night"). Programmatic plus a few hand-written lists. ~1/3 each.
-- *Chit-chat detector training data:* ft_v2 **train** prompts, category chat vs explain/oasst2. A logistic regression on the bge embeddings
-  (already computed by the store's embedder). No new model.
+## Part 2: gate + chit-chat routing
 
-**Gate 0 (separability, decided on the tune split only):** AUROC of top-1 similarity, on-topic vs garbled + unanswerable, ≥ 0.85. If it fails,
-stop: report the score distributions and don't build the similarity gate (a different signal would be needed, e.g. the RAG model's own
-answer likelihood). The chit-chat detector has the same rule (AUROC ≥ 0.85 on tune, chit-chat vs on-topic).
+### Data (built once, before any threshold is chosen; never the 100 factuality questions)
+- **On-topic:** ft_v2 **val** prompts, categories explain + oasst2 (2,144; the RAG model never trained on them). Split 50/50 tune / test (seed 0).
+- **Off-topic, generated by Qwen2.5-7B-Instruct (Apache-2.0), three kinds, ~300 each before dedupe, split 50/50 tune / test (seed 0) after
+  exact and near-duplicate removal across the whole set:**
+  - *chit-chat:* short casual messages to a friendly assistant that aren't questions about the world ("lol", "that's cool", "I'm bored", "thanks!").
+    Plus a fixed hand list of 20 very short ones ("lol", "hi", "ok", "haha", "thx", "brb", …) in the **test** split only.
+  - *unanswerable (clear but outside the store):* real-time ("what's the weather right now"), personal ("what's my dog's name"), after the
+    corpus ("who won the 2026 World Cup"), and very niche facts ("what's the population of a small named village"). Clear English.
+  - *garbled:* programmatic, from on-topic questions and English words: keyboard mash ("asdkj fhh qwe"), letters shuffled within words of a
+    real question, and **word salad (real words in random order) in the test split only** (a garbling type the thresholds never saw; reported
+    separately).
+- I read 20 random items of each kind before the chain runs and drop any generator that produces the wrong kind (recorded in the results).
 
-**Threshold (fixed on tune, then frozen):** the highest threshold that still passes **≥ 95% of on-topic tune questions** (so factuality can't
-fall far). The chit-chat detector threshold is picked the same way (≥ 95% of on-topic tune questions classed as not chit-chat).
+### Signals (computed per message, no training of AURA)
+- **g (garbled):** mean per-token NLL of the message under b10_s1, in the chat template "You: {msg}\nAura:" (message tokens only).
+- **c (chit-chat):** max bge cosine similarity to the chit-chat **tune** examples (leave-one-out on the tune split itself).
+- **s (similarity):** top-1 bge similarity of the retrieved corpus passage (what the store already returns).
 
-**Routing (arms):**
-| arm | chit-chat | below the threshold | above |
-|---|---|---|---|
-| G0 (today) | RAG + sources | RAG + sources | RAG + sources |
-| G1 | b10_s1, no sources | fixed reply: "I'm not sure what you mean. Can you say it another way?" | RAG + sources |
-| G2 | b10_s1, no sources | b10_s1, no sources | RAG + sources |
+### Gate 0: separability, on the tune split only
+Each signal is used only if its tune AUROC is ≥ 0.85: g for garbled vs all clear messages (on-topic + chit-chat + unanswerable); c for chit-chat
+vs on-topic; s for unanswerable vs on-topic. A signal that fails is dropped (its branch is never taken), the result is reported with the score
+distributions, and the rest of the gate is still evaluated.
 
-G1's below-gate reply is a **template, not the model**. I'm proposing it because a model answering garbled input without sources still
-invents facts (R0 false claims 33%). G2 tests whether answering closed-book is enough. b10_s1 is the trained no-source chat model (the RAG model
-never saw a message without sources outside the 20% random ones), so both models are loaded (~0.4 GB each).
+### Thresholds (fixed on tune, then frozen; the chain writes them to `thresholds.json` before it reads any test item)
+- g: the lowest threshold that passes (= does not flag) ≥ 95% of **each** clear tune group (on-topic, chit-chat, unanswerable).
+- c: the threshold that classes ≥ 95% of on-topic tune questions as not chit-chat.
+- s: the highest threshold that still passes ≥ 95% of on-topic tune questions.
 
-**Evals (all on test splits; same decoding as the re-score: top-p 0.9, T 0.7, penalty 1.15 excluding sources; 3 samples):**
-1. **Factuality must not drop:** the 100 questions, G1 and G2 vs G0. Rule: point drop ≤ 0.02 (joined, sampled). Abstentions score 0.
-2. **Off-topic test set, inappropriate-answer rate must drop:** the Qwen2.5-7B grader with a fixed rubric: for garbled/unanswerable,
-   *inappropriate* = states facts as an answer instead of saying it isn't sure or asking; for chit-chat, *inappropriate* = an unprompted factual
-   essay or a false claim. I hand-check 30 grades against the rubric before trusting it (as with the factuality grader). Rule: G1 (and G2) vs G0
-   paired bootstrap 95% CI < 0.
-3. **Chat quality (small):** a 30-message mixed set (10 fact, 10 chit-chat, 10 follow-ups): turn-ending rate and repeated-4-gram rate must not
-   worsen by more than 5 points vs G0, plus a side-by-side markdown for Jon to read. The reading is the real check here; the numbers are a floor.
+### Routing, in this order
+1. g above its threshold → **"unclear"** branch.
+2. c above its threshold → **chit-chat** branch.
+3. s below its threshold → **"no sources"** branch.
+4. Otherwise → RAG model + top-3 corpus sources (today's behaviour).
 
-**Decision:** the gate goes into `chat_with_aura.py` (as the default in store mode) only if rules 1-3 pass. If both G1 and G2 pass, prefer the
-one with the lower inappropriate rate. Report the gate's abstain rate on the factuality set either way.
+| arm | unclear | chit-chat | no sources | otherwise |
+|---|---|---|---|---|
+| G0 (today) | RAG + sources | RAG + sources | RAG + sources | RAG + sources |
+| G1 | template U: "I'm not sure what you mean, can you say it another way?" | b10_s1, no sources | template N: "I don't have good sources on that, so I'd rather not guess." | RAG + sources |
+| G2 | b10_s1, no sources | b10_s1, no sources | b10_s1, no sources | RAG + sources |
 
-## Part 3: multi-turn (two steps; only step A is in this approval)
-- **A. Zero-shot measurement (cheap):** history = the last 1-2 turns, with the retrieval query = the previous user message + the current one
-  (so "why does it do that?" retrieves about the earlier topic). To fit the window, sources drop to **k=2 at 60 words** when history is present.
-  Eval: 40 two-turn follow-up conversations (turn 1 a factuality-style question, turn 2 a pronoun follow-up with a reference answer), graded by
-  the factuality grader; single-turn factuality must be unchanged (empty history = today's prompt, bit-identical). Compare against "no history".
-- **B. If A shows the model ignores or garbles history** (expected: it never saw history with sources): a multi-turn RAG fine-tune set
-  (Qwen2.5-7B teacher, corpus sources only, same filters) and a fine-tune of ~1.5 GPU-h. That needs its own plan and approval.
+Garbled is checked first because a confident falsehood on garbled input is worse than a clarification question on "lol"; the g threshold already
+keeps ≥ 95% of chit-chat unflagged. The templates are fixed text, not model output. Model: RAG `checkpoints/rag/s0` and `s1` (both seeds, pooled),
+b10_s1 = `checkpoints/v2base/ft/b10_s1`.
 
-## Cost
-Code ~half a day (CPU). GPU: off-topic set grading and gate eval ~20 min; factuality re-run for G1/G2 ~40 min; multi-turn A ~20 min.
-**≈ 1.5 GPU-h**, one unattended chain, smoke-tested, with FAILED + ntfy on any stop. Licences: nothing new (bge MIT, Qwen Apache-2.0, corpus
-ODC-By; Wikipedia stays inference-only).
+### Evals (test splits only; joined encoding; the re-score's decoding: top-p 0.9, T 0.7, penalty 1.15 excluding sources, seeds 1-3)
+1. **Factuality must not drop.** The gate is deterministic and the prompts are identical to the re-score's, so G1 and G2 on the 100 questions are
+   composed from the re-score's graded rows (`experiments/results/retrieval/factuality_rescore`): R2c rows where the gate passes, R0 (b10_s1) rows
+   where it routes to b10_s1, and template rows scored 0 with no false claim. **Rule: G1 − G0 ≥ −0.02 (point estimate; G0 = R2c).** Same for
+   G2. The abstain rate (template share) on the 100 questions is reported.
+2. **Off-topic test set: the inappropriate-answer rate must drop.** Model replies are graded by Qwen2.5-7B with a fixed rubric per kind:
+   - garbled: *inappropriate* = states facts or answers a guessed question instead of saying it isn't sure or asking what was meant;
+   - unanswerable: *inappropriate* = gives a specific factual answer (a fake weather report, a name, a winner, a number);
+   - chit-chat: *inappropriate* = an unprompted factual essay, or any false claim.
+   Template replies are scored by rule, not by the grader: never inappropriate. I hand-check 30 model-reply grades (10 per kind) against the
+   rubric before reading any arm's result; if more than 3 of 30 disagree, the rubric is fixed and everything is regraded before anything is reported.
+   **Rule: G1 − G0 inappropriate rate, paired bootstrap 95% CI entirely below 0** (over messages; RAG seeds pooled). Same test for G2.
+3. **The two gate replies, scored separately (Jon's change 1).** For each template, on the test splits: how often it fires per kind (unclear
+   should fire on garbled; no-sources on unanswerable), its **mis-fires** (unclear on clear messages; no-sources on on-topic test questions and on
+   the 100 factuality questions), and the inappropriate rate of each kind with vs without it. Reported, no pass/fail beyond rules 1-2, except:
+   a template whose mis-fire rate on on-topic test questions exceeds 10% is not shipped even if rules 1-2 pass.
+4. **Chat quality (small):** 30 test messages (10 on-topic, 10 chit-chat, 10 garbled/unanswerable), 1 sampled reply per arm: turn-ending rate and
+   repeated-4-gram rate must not get worse by more than 5 points vs G0; plus a side-by-side markdown for Jon to read (the reading is the real check).
+
+**Decision:** the gate goes into `chat_with_aura.py` as the default in store mode only if rules 1, 2 and 4 pass (and rule 3's mis-fire limit for
+each template). If G1 and G2 both pass, the one with the lower inappropriate rate. Until then it's behind `--gate`.
+
+## Part 2b: answer entropy (diagnostic only, never a gate; Jon's change 2)
+- Definition: for each answer token, the entropy of the model's raw next-token distribution (softmax of the logits at T = 1, before the repetition
+  penalty, top-p and temperature), averaged over the answer's tokens. Computed by teacher forcing the answer after its exact prompt (the answer
+  is re-encoded from text, which can differ from the generated tokens in rare cases; noted, not corrected).
+- Reported on the re-score's R2c (G0) answers, joined, sampled, both RAG seeds: AUROC of mean entropy for predicting the grader's FALSE_CLAIM,
+  with a 95% bootstrap CI, and mean entropy for false vs not-false answers. Also on R0 (b10_s1, no sources) as a comparison. **Reading rule:**
+  "predicts" only if the AUROC CI excludes 0.5. Logged in chat too.
+
+## Part 3, step A: multi-turn, zero-shot measurement (step B, a multi-turn fine-tune, needs its own plan)
+- 40 two-turn conversations generated by Qwen2.5-7B (turn 1 a children's science/general-knowledge question, turn 2 a follow-up that only makes
+  sense with turn 1, e.g. "why does it do that?", with a reference answer and key facts), none from the 100 factuality questions; I read all 40
+  and drop broken ones before the run.
+- Arms (RAG s0 and s1, 3 samples): **M0** the follow-up alone (today); **M1** history = turn 1 + AURA's own turn-1 answer in the chat template,
+  retrieval query = turn-1 question + follow-up, sources cut to **k = 2 at 60 words** to fit the window.
+- Graded by the factuality grader with the question shown as "turn 1 … / follow-up …". **Rule: M1 is adopted for chat only if M1 − M0 > 0
+  (paired bootstrap CI > 0)**. Single-turn chat without history is unchanged by construction.
+
+## Next-base checklist (Jon's change 3)
+- Context window ≥ 1024 tokens (512 can't hold 3 sources + history + a 160-token answer). Recorded in CLAUDE.md.
+
+## Cost and running
+Code ~half a day (CPU). GPU ≈ 1 h: Qwen generation of the sets ~10 min, signals ~5 min, off-topic generation (3 arms × 2 seeds × 3 samples ×
+~450 test messages, mostly short) ~15 min, grading ~10 min, entropy ~5 min, multi-turn ~10 min. One unattended chain, every phase smoke-tested
+first, FAILED + ntfy on any stop and at the end. The 450 W cap is checked first. Nothing new to license (bge MIT, Qwen Apache-2.0, corpus ODC-By;
+Wikipedia stays inference-only and isn't used here).
+
+## Changes after freezing
+(none yet)
