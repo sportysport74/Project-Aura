@@ -105,6 +105,11 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-07 07:26: retrieval re-score DONE (RESULTS.md; pre-registered `experiments/plans/retrieval_rescore.md`).** With the sources excluded
+from the repetition penalty: R2c 0.512 vs R0 0.308 (+0.204, CI [+0.150, +0.260]), false claims 33% → 13%; Wikipedia store still worse (−0.073) →
+corpus stays the default store. Both evals agree on both verdicts. Copying of ≥ 8 source words rose to 28% (R2c). `chat_with_aura.py --store
+corpus|wiki` done (`b13aa54`; its repetition penalty covers only the reply, so sources are never penalized). **Default chat checkpoint unchanged; user tries `checkpoints/rag/s0` first.**
+
 **2026-11-06 23:37: retrieval DONE (RESULTS.md).** Retrieval works (pre-registered): RAG fine-tune + corpus store 0.376 vs b10_s1 0.310
 (+0.066, CI > 0), false claims 32% → 25%, closed-book unchanged. Wikipedia store worse than corpus (−0.044) → corpus is the default store. RAG
 models: `checkpoints/rag/s{0,1}`; stores `data/retrieval/{corpus,wiki}`. Follow-ups: exclude the sources from the repetition penalty (it

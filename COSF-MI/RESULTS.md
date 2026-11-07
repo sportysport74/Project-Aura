@@ -4,6 +4,32 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-07 — Retrieval re-score: sources excluded from the repetition penalty (pre-registered second eval)
+
+- **Design** (`experiments/plans/retrieval_rescore.md`, committed 2026-11-07 06:42 before running): identical to the 2026-11-06 eval (same 9
+  model×arm runs, questions, seeds, retrieval results, grader) except that sampled decoding's repetition penalty (1.15) covers the chat template +
+  question + reply so far, **not tokens that appear only in the sources**. Prompts without sources are bit-identical to the old path (checked).
+  `experiments/results/retrieval/factuality_rescore/report.md`. **It doesn't replace the first eval; both are reported.**
+
+| arm (joined, sampled) | first eval (penalty over sources) | **re-score (sources excluded)** | fully correct | false claims | copies ≥ 8 words of a source |
+|---|---|---|---|---|---|
+| R0 b10_s1, no sources | 0.310 | 0.308 | 10.0% | 33.0% | 0% |
+| R1c b10_s1 + corpus sources | 0.070 | 0.172 | 3.0% | 11.3% | 2.3% |
+| **R2c RAG + corpus store** | 0.376 | **0.512** | 23.3% | **13.2%** | 28.3% |
+| R2w RAG + Wikipedia store | 0.332 | 0.440 | 14.3% | 19.7% | 12.3% |
+| R2-closed | 0.302 | 0.302 | 5.3% | 32.3% | 0% |
+| R2-oracle | 0.262 | 0.496 (greedy 0.610) | 22.7% | 17.5% | 10.5% |
+
+- **Rule 1, retrieval works: YES** (agrees with the first eval). R2c − R0 **+0.204 [+0.150, +0.260]** (first eval +0.066); false claims 33.0% →
+  **13.2%**; R2-closed − R0 −0.006 (within −0.02). Pooled b10 seeds: +0.211 [+0.160, +0.263]. Pieces encoding: R2c 0.512 vs R0 0.323.
+- **Rule 2, Wikipedia as the default store: NO** (agrees). R2w − R2c **−0.073 [−0.123, −0.025]**. "(Wikipedia: title)" tag on 92% of R2w answers.
+- **The two evals agree on both verdicts; they differ in size.** The penalty over sources was the main handicap: R2c's gain over R0 triples, and
+  the oracle goes from below R0 (0.262) to 0.496, close to its greedy ceiling.
+- **Copying rose** (R2c 5.7% → 28.3% of answers share ≥ 8 consecutive words with a source). Descriptive split, not pre-registered and confounded
+  (copying happens when a source is on topic): R2c answers that copy score 0.600 with 9.4% false claims, those that don't 0.376 with 25.0%.
+  Copying from the corpus store is licence-fine (ODC-By, with attribution); copying from Wikipedia at inference would need CC BY-SA attribution,
+  which the "(Wikipedia: title)" tag is for.
+
 ## 2026-11-06 — Retrieval for AURA (pre-registered; retrieval works, the corpus store beats Wikipedia)
 
 - **Design** (`experiments/plans/retrieval_prereg.md`, committed 2026-11-06 08:34 before any retrieval code ran): corpus store (Cosmopedia v2 +
