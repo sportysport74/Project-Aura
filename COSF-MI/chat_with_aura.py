@@ -245,7 +245,10 @@ def main():
     print("=" * 70)
     print()
     if chat_format:
-        print("  Mode: CHAT (AURA remembers the last 4 turns)")
+        if store is not None:
+            print(f"  Mode: CHAT with sources from {path} (each question answered on its own, no memory of earlier turns)")
+        else:
+            print("  Mode: CHAT (AURA remembers the last 4 turns)")
         print(f"  Temperature: 0.7, top-k 40, repetition penalty {REPETITION_PENALTY}, no repeated {NO_REPEAT_NGRAM}-grams")
         print()
         print("  Tips:")
