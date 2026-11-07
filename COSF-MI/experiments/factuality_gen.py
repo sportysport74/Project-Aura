@@ -40,6 +40,9 @@ def main():
     p.add_argument("--store", default=None, help="retrieval store dir (data/retrieval/corpus or .../wiki): top-k sources in the prompt")
     p.add_argument("--k", type=int, default=3)
     p.add_argument("--oracle", action="store_true", help="the question's reference answer as source [1] (upper bound)")
+    p.add_argument("--rep-scope", default="all", choices=["all", "no_sources"],
+                   help="no_sources: the repetition penalty skips tokens that appear only in the retrieved sources "
+                        "(experiments/plans/retrieval_rescore.md); all = the original whole-context penalty")
     p.add_argument("--append", action="store_true", help="append to replies.jsonl instead of overwriting (several arms, one grading run)")
     args = p.parse_args()
     out_dir = ROOT / args.out
@@ -83,7 +86,14 @@ def main():
                     ("sampled_rep", s, dict(greedy=False, seed=s, top_k=0, top_p=0.9, rep_penalty=1.15))
                     for s in range(1, args.samples + 1)]
                 for mode, seed, kw in runs:
-                    replies = ab_eval.generate(model, tok, prompts, max_new=args.max_new, bs=20, joined=enc == "joined", **kw)
+                    rep_ids = None
+                    if args.rep_scope == "no_sources" and kw.get("rep_penalty", 1.0) != 1.0:
+                        # penalize the template + question tokens (+ the reply), not tokens that appear only in the sources
+                        rep_ids = [None if not ps else (tok.encode(f"{ft.USER} {q['question']}\n{ft.AURA}") if enc == "joined" else
+                                                        tok.encode(ft.USER) + tok.encode(q["question"]) + tok.encode(ft.AURA))
+                                   for q, ps in zip(qs, sources)]
+                    replies = ab_eval.generate(model, tok, prompts, max_new=args.max_new, bs=20, joined=enc == "joined",
+                                               rep_ids=rep_ids, **kw)
                     for q, ps, (reply, ended) in zip(qs, sources, replies):
                         # "reply" is what the grader sees; "reply_shown" carries the "(Wikipedia)" tag (pre-registered rule)
                         f.write(json.dumps({"model": name, "checkpoint": path, "encoding": enc, "decoding": mode,

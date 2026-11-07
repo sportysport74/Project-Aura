@@ -102,13 +102,16 @@ def rate_prompts(chat_val_lines, pilot_by_cat):
 
 @torch.no_grad()
 def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40, seed=0, bs=64, top_p=None,
-             rep_penalty=1.0, joined=False):
+             rep_penalty=1.0, joined=False, rep_ids=None):
     """[(reply, ended)] per prompt; ended = the model wrote "You:" (its turn is over) before the cap.
     Sampling: temperature, then top_k (0 = off), then top_p (None = off). rep_penalty > 1 is the CTRL/HF-style penalty on
     every token already in the context (prompt + reply so far): positive logits divided by it, negative ones multiplied.
     The defaults (top-k 40, no top-p, no penalty) are what the A/B report used. The prompt is encoded piece by piece, as
     finetune_chat.py builds training lines; joined=True encodes "You: {p}\nAura:" in one go, as the pretraining corpus
-    wrote its chat-format slot (base models prefer it; see experiments/results/ft_l100/notes.md)."""
+    wrote its chat-format slot (base models prefer it; see experiments/results/ft_l100/notes.md).
+    rep_ids (2026-11-07, retrieval re-score): optional list, one entry per prompt. An entry that is a list of token ids makes the penalty
+    apply to those ids + the reply so far, instead of the whole context (used to exclude retrieved sources); None keeps the whole context.
+    rep_ids=None (the default) runs the original code path unchanged."""
     dev = next(model.parameters()).device
     user_ids, aura_ids = tok.encode(ft.USER), tok.encode(ft.AURA)
     k = len(user_ids)
@@ -123,12 +126,21 @@ def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40
         pos = torch.tensor([len(c) for c in ctx], device=dev)
         gen, done, ended = [[] for _ in ctx], [False] * B, [False] * B
         g = torch.Generator(device=dev).manual_seed(seed * 100_003 + s)
+        if rep_ids is not None and rep_penalty != 1.0:
+            V = model.lm_head.weight.shape[0] if hasattr(model, "lm_head") else tok.vocab_size
+            seen_static = torch.zeros(B, V, dtype=torch.bool, device=dev)
+            for i, c in enumerate(ctx):
+                ids = c if rep_ids[s + i] is None else rep_ids[s + i]
+                seen_static[i, torch.tensor(ids, dtype=torch.long, device=dev)] = True
         for _ in range(max_new):
             T = int(pos.max())
             if all(done) or T >= SEQ:
                 break
             logits = model(buf[:, :T])[torch.arange(B, device=dev), pos - 1].float()
-            if rep_penalty != 1.0:
+            if rep_penalty != 1.0 and rep_ids is not None:
+                seen = seen_static  # updated with each generated token below
+                logits = torch.where(seen, torch.where(logits > 0, logits / rep_penalty, logits * rep_penalty), logits)
+            elif rep_penalty != 1.0:
                 ctx_mask = torch.arange(T, device=dev)[None, :] < pos[:, None]  # ignore right padding
                 seen = torch.zeros_like(logits, dtype=torch.bool)
                 seen.scatter_(1, torch.where(ctx_mask, buf[:, :T], buf[:, :1]), True)
@@ -147,6 +159,8 @@ def generate(model, tok, prompts, greedy, max_new=200, temperature=0.7, top_k=40
                     logits = logits.scatter(1, idx, srt.masked_fill(drop, -float("inf")))
                 nxt = torch.multinomial(torch.softmax(logits, -1), 1, generator=g)[:, 0]
             nxt_l = nxt.tolist()
+            if rep_ids is not None and rep_penalty != 1.0:
+                seen_static[torch.arange(B, device=dev), nxt] = True
             for i in range(B):
                 if done[i]:
                     continue

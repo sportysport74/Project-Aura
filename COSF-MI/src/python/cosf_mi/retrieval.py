@@ -115,11 +115,19 @@ def content_words(text):
     return {w for w in WORD.findall(text.lower()) if len(w) >= 4 and w not in STOP}
 
 
-def uses_wikipedia(answer, question, passages, min_words=3):
+def wikipedia_used(answer, question, passages, min_words=3):
+    """The Wikipedia passage the answer uses (most shared content words, >= min_words), or None (pre-registered rule)."""
     a = content_words(answer) - content_words(question)
-    return any(p.get("source") == "wikipedia" and len(a & content_words(p["text"])) >= min_words for p in passages)
+    best = max(((len(a & content_words(p["text"])), p) for p in passages if p.get("source") == "wikipedia"),
+               key=lambda t: t[0], default=(0, None))
+    return best[1] if best[0] >= min_words else None
+
+
+def uses_wikipedia(answer, question, passages, min_words=3):
+    return wikipedia_used(answer, question, passages, min_words) is not None
 
 
 def tag_answer(answer, question, passages):
-    """The shown answer: ' (Wikipedia)' appended when it uses a Wikipedia passage (pre-registered rule)."""
-    return answer.rstrip() + " (Wikipedia)" if uses_wikipedia(answer, question, passages) else answer
+    """The shown answer: ' (Wikipedia: <title>)' appended when it uses a Wikipedia passage (user decision 2026-11-07: name the article)."""
+    p = wikipedia_used(answer, question, passages)
+    return answer if p is None else f"{answer.rstrip()} (Wikipedia: {p.get('title') or 'untitled'})"

@@ -96,7 +96,7 @@ def load_model(checkpoint_path: str = None):
 
 
 def generate_chat_reply(model, tokenizer, history, user_input, chat_format,
-                        max_tokens=80, temperature=0.7, top_k=40, device='cuda'):
+                        max_tokens=80, temperature=0.7, top_k=40, device='cuda', window=256):
     """
     Aura's next reply. The prompt is built piece by piece exactly as
     finetune_chat.py built its training data, and generation stops when the
@@ -111,11 +111,12 @@ def generate_chat_reply(model, tokenizer, history, user_input, chat_format,
 
     model.eval()
     model = model.to(device)
-    input_ids = torch.tensor([ids[-256:]], dtype=torch.long, device=device)
+    # keep the newest tokens, leaving room for the reply (window = the model's max_seq_len)
+    input_ids = torch.tensor([ids[-(window - max_tokens):]], dtype=torch.long, device=device)
     reply = []
     with torch.no_grad():
         for _ in range(max_tokens):
-            logits = model(input_ids[:, -256:])[0, -1, :]
+            logits = model(input_ids[:, -window:])[0, -1, :]
             next_token = sample_next(logits, reply, temperature, top_k)
             reply.append(next_token.item())
             input_ids = torch.cat([input_ids, next_token.unsqueeze(0)], dim=1)
@@ -182,7 +183,24 @@ def main():
     print()
 
     # Load model
-    model, config, chat_format = load_model(*sys.argv[1:2])
+    # usage: chat_with_aura.py [checkpoint] [--store corpus|wiki] [--k 3]
+    argv = sys.argv[1:]
+    store_name, k = None, 3
+    if '--store' in argv:
+        i = argv.index('--store')
+        store_name = argv[i + 1]
+        del argv[i:i + 2]
+    if '--k' in argv:
+        i = argv.index('--k')
+        k = int(argv[i + 1])
+        del argv[i:i + 2]
+    model, config, chat_format = load_model(*argv[:1])
+    store = None
+    if store_name:
+        from cosf_mi.retrieval import Store
+        path = {'corpus': 'data/retrieval/corpus', 'wiki': 'data/retrieval/wiki'}.get(store_name, store_name)
+        print(f"Loading retrieval store: {path} (top-{k} sources per message)")
+        store = Store(Path(__file__).parent / path)
 
     # Load tokenizer
     print()
@@ -200,20 +218,25 @@ def main():
     print("MODEL STATISTICS")
     print("=" * 70)
 
-    metrics = model.get_phase_coherence_metrics()
-    print()
-    print("Phase Metrics:")
-    print(f"  Mean coherence: {metrics['mean_coherence']:.4f}")
-    print(f"  Max phase velocity: {metrics['max_phase_velocity']:.4f}")
-    print(f"  Homeostatic drift: {metrics['homeostatic_drift']:.4f}")
-
-    if metrics.get('chirality_enabled', False):
+    if getattr(config, 'projection', 'oscillator') == 'linear':
         print()
-        print("Chirality Metrics:")
-        print(f"  Right-handed: {metrics['total_right_handed']}")
-        print(f"  Left-handed: {metrics['total_left_handed']}")
-        print(f"  Balance: {metrics['chirality_balance']:.3f}")
-        print(f"  Total flips: {metrics['total_chirality_flips']}")
+        print("Phase metrics: n/a (linear projections)")
+    else:
+        metrics = model.get_phase_coherence_metrics()
+        print()
+        print("Phase Metrics:")
+        print(f"  Mean coherence: {metrics['mean_coherence']:.4f}")
+        print(f"  Max phase velocity: {metrics['max_phase_velocity']:.4f}")
+        print(f"  Homeostatic drift: {metrics['homeostatic_drift']:.4f}")
+
+        if metrics.get('chirality_enabled', False):
+            print()
+            print("Chirality Metrics:")
+            print(f"  Right-handed: {metrics['total_right_handed']}")
+            print(f"  Left-handed: {metrics['total_left_handed']}")
+            print(f"  Balance: {metrics['chirality_balance']:.3f}")
+            print(f"  Total flips: {metrics['total_chirality_flips']}")
+
 
     # Chat settings
     print()
@@ -269,6 +292,10 @@ def main():
             break
 
         if user_input.lower() == 'stats':
+            if getattr(config, 'projection', 'oscillator') == 'linear':
+                print("(no oscillator stats: this model has linear projections)")
+                print()
+                continue
             metrics = model.get_phase_coherence_metrics()
             print()
             print("Current Model Stats:")
@@ -287,9 +314,20 @@ def main():
             continue
 
         if chat_format and not user_input.lower().startswith('temp '):
-            reply = generate_chat_reply(model, tokenizer, conversation_history[-4:], user_input,
-                                        chat_format, temperature=temperature, device=device)
-            print(f"AURA: {reply}")
+            window = getattr(config, 'max_seq_len', 256)
+            if store is not None:  # retrieval: the sources go into this turn only; the history keeps the plain question
+                from cosf_mi.retrieval import format_prompt, tag_answer
+                passages = store.search([user_input], k=k)[0]
+                # no history: the RAG fine-tune is single-turn, and history + 3 sources would overflow the window and cut the question
+                reply = generate_chat_reply(model, tokenizer, [], format_prompt(user_input, passages),
+                                            chat_format, max_tokens=160, temperature=temperature, device=device, window=window)
+                shown = tag_answer(reply, user_input, passages)  # adds "(Wikipedia: <title>)" when a Wikipedia passage is used
+            else:
+                reply = generate_chat_reply(model, tokenizer, conversation_history[-4:], user_input,
+                                            chat_format, max_tokens=80 if window <= 256 else 160, temperature=temperature,
+                                            device=device, window=window)
+                shown = reply
+            print(f"AURA: {shown}")
             print()
             conversation_history.append((user_input, reply))
             continue

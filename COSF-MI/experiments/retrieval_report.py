@@ -67,7 +67,7 @@ def main():
             fc = per_q(grades, models, enc, "sampled_rep", false)
             cc = per_q(grades, models, enc, "sampled_rep", correct)
             rr = [r for r in replies if r["model"] in models and r["encoding"] == enc and r["decoding"] == "sampled_rep"]
-            tag = sum(r.get("reply_shown", r["reply"]).endswith("(Wikipedia)") for r in rr) / max(1, len(rr))
+            tag = sum(bool(re.search(r"\(Wikipedia(: [^)]*)?\)$", r.get("reply_shown", r["reply"]))) for r in rr) / max(1, len(rr))
             m = lambda x: sum(x.values()) / max(1, len(x))  # noqa: E731
             cp = sum(bool(r.get("copies8")) for r in rr) / max(1, len(rr))
             L.append(f"| {arm} | **{m(s):.3f}** | {m(g):.3f} | {m(cc):.1%} | {m(fc):.1%} | {tag:.1%} | {cp:.1%} |")
