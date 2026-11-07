@@ -690,6 +690,13 @@ Open:
   ~120 tokens median and ~10 worst case, so chat history can't sit next to retrieval (`experiments/plans/retrieval_gate.md`).
 - lr: 6e-4 was the low edge of the l100 grid, 3e-4 was worse (RESULTS 2026-11-06); re-check if the width or the batch changes.
 
+### GitHub cleanup checklist (before the next push; Jon, 2026-11-07)
+- [ ] README: Jon's draft (pasted 2026-11-07), corrected: the oscillator-vs-standard comparison is finished (standard won by 0.27-0.33 on
+  11-03) and every model since 11-04 is vanilla2. Keep its "What is not established" and "How results are reported" sections.
+- [ ] HISTORY.md: Jon's draft (Phases 1-6 + "What carried through" table; **not received yet, ask for it**) + Phases 7-8 and "Where the
+  oscillators stand" from `docs/cleanup/HISTORY_additions.md`; update the table to match; delete nothing.
+- [ ] Then merge `distill-investigation` / push (Jon's call). Scan for secrets (ntfy topic!) and `/home/` paths first.
+
 ## Rules
 - Distillation teachers must be open-weights with a license that allows training on outputs; record teacher + license per run.
 - **Plan for possible commercial use** (decided 2026-10-28): every new dataset, teacher and model choice must allow commercial use.
