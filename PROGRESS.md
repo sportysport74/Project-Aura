@@ -6,10 +6,11 @@ One page. Measured results, with their evidence, are in [`COSF-MI/RESULTS.md`](C
 
 ## Right now
 
-- **Nothing is running.** The GPU is idle.
-- **Next step, waiting for approval:** the Aura v3 base, ~330M params, context 1024, ~15B tokens
-  ([`aura_v3_base.md`](COSF-MI/experiments/plans/aura_v3_base.md)). The plan is ≈ 86 GPU-h. Its first ~5 h (a scaling check and an lr check)
-  decide whether the rest runs.
+- **Running (since 2026-11-07 13:29):** Aura v3 steps 1-2, a scaling check (104M vs 330M at context 1024, 2 seeds) and an lr check at 330M,
+  ~5-6 h. Results land in `COSF-MI/experiments/results/v3_checks/report.md`.
+- **Next:** the Aura v3 base, ~330M params, context 1024, ~15B tokens
+  ([`aura_v3_base.md`](COSF-MI/experiments/plans/aura_v3_base.md)). The plan is ≈ 86 GPU-h. The 15B-token pretrain
+  (step 3, ~74 GPU-h) waits for Jon to see the step 1-2 results.
 - **Best chat setup:** `checkpoints/rag/s0` (104M) with the corpus retrieval store, the gate and one turn of memory:
   ```
   cd COSF-MI && .venv/bin/python chat_with_aura.py checkpoints/rag/s0/best_model.pt --store corpus [--show-sources] [--no-gate]

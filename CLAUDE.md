@@ -105,6 +105,13 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-07 13:29: Aura v3 steps 1-2 LAUNCHED** (approved; run `COSF-MI/runs/20261107-132900`, `scripts/v3_checks_queue.sh`, results
+`COSF-MI/experiments/results/v3_checks/report.md`, checkpoints `checkpoints/v3_checks/`). Scaling check (l100 6e-4 vs x330 3e-4, seeds 1-2) then
+lr check (x330 2e-4/4.5e-4/6e-4, edge rule). ETA ~5-6 h. New code: `--grad-accum`, `--corpus a,b` (tests pass). **Jon's conditions: step 3
+waits for him; step-3 auto-resume max 4, stop for good if 2 faults within 3 h; any RAM install + memtest happens before step 3; no push until
+the GitHub cleanup.** Jon pasted a README draft for that cleanup: keep it, but it's outdated (says the oscillator-vs-standard comparison is in
+progress and that AURA uses oscillator layers; both changed on 11-03).
+
 **2026-11-07 evening: Aura v3 base PLANNED, not run (`COSF-MI/experiments/plans/aura_v3_base.md`; waiting for Jon).** x330 (d1024 L24, 326.9M,
 context 1024) measured at 70k tok/s probe (≈ 61k sustained), 20.9 GiB at batch 16 × 1024; 15B tokens (10B on disk + ~5B new shards) ≈ 86 GPU-h
 total, scaling + lr checks (~5 h) first. Only code change so far: the `x330` size entry. **At-a-glance status: `PROGRESS.md` (repo root).**
