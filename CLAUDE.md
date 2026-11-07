@@ -105,6 +105,11 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-06 23:37: retrieval DONE (RESULTS.md).** Retrieval works (pre-registered): RAG fine-tune + corpus store 0.376 vs b10_s1 0.310
+(+0.066, CI > 0), false claims 32% → 25%, closed-book unchanged. Wikipedia store worse than corpus (−0.044) → corpus is the default store. RAG
+models: `checkpoints/rag/s{0,1}`; stores `data/retrieval/{corpus,wiki}`. Follow-ups: exclude the sources from the repetition penalty (it
+penalizes reusing source words; greedy shows +0.12); add `--store` to `chat_with_aura.py` (with the "(Wikipedia)" tag for the wiki store).
+
 **2026-11-06 14:29: retrieval experiment LAUNCHED** (approved; pre-registered `COSF-MI/experiments/plans/retrieval_prereg.md`, committed
 08:34 before any code ran). Corpus store (Cosmopedia + FineWeb-Edu, ≤ 6M passages) for training and eval; **Simple English Wikipedia (CC BY-SA)
 is an inference-only store**, never in training data; answers that use a Wikipedia passage get "(Wikipedia)". Gate: corpus recall@3 ≥ 0.6. Chain

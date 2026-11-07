@@ -4,6 +4,33 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-06 — Retrieval for AURA (pre-registered; retrieval works, the corpus store beats Wikipedia)
+
+- **Design** (`experiments/plans/retrieval_prereg.md`, committed 2026-11-06 08:34 before any retrieval code ran): corpus store (Cosmopedia v2 +
+  FineWeb-Edu, 6M passages, ODC-By) and Simple English Wikipedia (CC BY-SA, **inference only**), bge-small-en-v1.5 (MIT) index. RAG fine-tune
+  from the 10B vanilla2 base on ft_v2 with corpus sources only (Qwen2.5-7B teacher, 20% random sources), seeds 0 and 1. Factuality eval (100
+  questions, Qwen2.5-7B grader). `experiments/results/retrieval/factuality/report.md`.
+- **Gate:** corpus recall@3 **0.81** (≥ 0.6, passed); Wikipedia recall@3 0.64.
+
+| arm (joined encoding) | score (sampled, pre-registered) | greedy | fully correct | false claims | "(Wikipedia)" tagged |
+|---|---|---|---|---|---|
+| R0 b10_s1, no sources | 0.310 | 0.375 | 10.0% | 32.0% | - |
+| R1c b10_s1 + corpus sources (never trained with them) | 0.070 | 0.125 | 1.3% | 16.0% | - |
+| **R2c RAG fine-tune + corpus store** | **0.376** | **0.497** | 9.3% | **25.2%** | - |
+| R2w RAG fine-tune + Wikipedia store | 0.332 | 0.492 | 9.8% | 33.5% | 49.7% |
+| R2-closed (RAG fine-tune, no sources) | 0.302 | 0.355 | 5.0% | 32.3% | - |
+| R2-oracle (reference answer as the only source) | 0.262 | **0.613** | 5.3% | 36.5% | - |
+
+- **Rule 1, retrieval works: YES.** R2c − R0 **+0.066 [+0.018, +0.117]**; false claims fall 32.0% → 25.2%; closed-book unchanged (R2-closed − R0
+  −0.008, within the −0.02 allowance). Against the pooled b10 seeds: +0.075 [+0.033, +0.120]. Pieces encoding: R2c 0.394 vs R0 0.327.
+- **Rule 2, Wikipedia as the default store: NO.** R2w − R2c **−0.044 [−0.084, −0.006]**: the corpus store stays the default (Wikipedia's recall is
+  lower, 0.64 vs 0.81, and its answers make more false claims, 33.5% vs 25.2%). Half of the R2w answers got the "(Wikipedia)" tag.
+- **Retrieval needs the training:** sources given to a model never trained with them collapse its score (R1c 0.070).
+- **Decoding interaction (found here, not pre-registered):** the pre-registered sampled decoding uses a repetition penalty (1.15) over prompt +
+  reply, which penalizes reusing the sources' words. Greedy decoding has no penalty and shows a larger gain (R2c 0.497 vs R0 0.375) and the
+  oracle's real ceiling (0.613 greedy vs 0.262 sampled). With retrieval, the penalty should probably exclude the sources. That's a follow-up, and
+  the verdicts above stand on the pre-registered metric.
+
 ## 2026-11-06 — Probe confound check and l100 lr check at 3e-4 (pre-registered, `experiments/plans/overnight_1105.md`)
 
 - **Probe confound check.** From the new base's 4.5B stable state, phase A's schedule re-applied (warmup to 6e-4, cosine to 0 over 2.2B unseen

@@ -1,0 +1,7 @@
+{
+ "file": "recall_corpus.jsonl",
+ "questions": 100,
+ "recall@1": 0.56,
+ "recall@3": 0.81,
+ "grader": "Qwen/Qwen2.5-7B-Instruct (Apache-2.0), temperature 0"
+}

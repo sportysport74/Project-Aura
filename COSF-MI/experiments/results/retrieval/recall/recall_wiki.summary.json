@@ -1,0 +1,7 @@
+{
+ "file": "recall_wiki.jsonl",
+ "questions": 100,
+ "recall@1": 0.45,
+ "recall@3": 0.64,
+ "grader": "Qwen/Qwen2.5-7B-Instruct (Apache-2.0), temperature 0"
+}
