@@ -1,4 +1,4 @@
-# Plan: Aura v3 base (~330M, context 1024, ~15B tokens) + one mixed fine-tune (written 2026-11-07, NOT RUN; needs Jon's approval)
+# Plan: Aura v3 base (~330M, context 1024, ~15B tokens) + one mixed fine-tune (written 2026-11-07; steps 1-2 APPROVED, step 3 not)
 
 Nothing in this plan has run except a 60-step throughput probe (below). Every number marked *estimate* comes from that probe.
 
@@ -111,6 +111,21 @@ kept, ~1.3 GB each) ⇒ **peak ~65 GB, ~45 GB after the raw shards go.**
   only if Jon approves it for this run (as for stage 2 / v2base: max 2, two faults within 3 h → stop for good).
 - Steps 1 and 2 run as one chain; **step 3 doesn't start until Jon has seen the step 1-2 results** (a ~73 h commitment).
 - Compiled runs aren't bit-reproducible, so the scaling and lr checks use the stated seeds and report every run.
+
+## Approval (Jon, 2026-11-07) and pre-registered details for steps 1-2 (frozen before launch)
+1. Build and smoke-test the code for steps 1-2, then run the scaling and lr checks as one chain (`scripts/v3_checks_queue.sh`), alerts on.
+2. Long pretrain (step 3): auto-resume allowed, **max 4 resumes in total**, stop for good if 2 faults within 3 h; every fault in CRASHES.md
+   with GPU telemetry + the HWiNFO window.
+3. **Step 3 doesn't launch until Jon has seen the step 1-2 results.** If new RAM goes in, it's installed and memory-tested before step 3,
+   never during a run.
+4. No push until the GitHub cleanup.
+
+Details fixed now: steps 1-2 use corpora v1 + ext (10B tokens, one seeded permutation; ext2 isn't needed until step 3, so its download moves
+to step 3 prep). Batch 16 × grad-accum 4 × 1024 = 65,536 tokens/step, 3,052 steps (= 200M tokens), warmup 300, cosine to 0 at step 3,052,
+val on the whole v1 val split at 1024 tokens. Rule 1: continue only if x330 < l100 on both seeds (else stop, alert, report). Rule 2: lowest
+val loss among 2e-4 / 3e-4 / 4.5e-4 / 6e-4 (seed 1); if it's 2e-4, also run 1.3e-4; if 6e-4, also 9e-4; then the lowest of all is chosen.
+Gradient accumulation was checked: float64 gradients equal the full batch to 1e-15 (`tests/test_grad_accum_multicorpus.py`); in training
+runs the losses differ by ~1e-3 after 10 steps because dropout (0.1) draws different masks per micro-batch.
 
 ## Risks / open points
 - At 61k tok/s the pretrain is ~3 days of GPU; the two GPU faults (nvlddmkm 153) happened under exactly this kind of sustained load. Telemetry

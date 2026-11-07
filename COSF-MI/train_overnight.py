@@ -70,6 +70,7 @@ def train_with_gentle_sleep(
     sleep=True,
     save_every_minutes=0.0,
     save_at_steps=(),
+    grad_accum=1,
 ):
     """Train model with gentle sleep cycles.
 
@@ -127,16 +128,27 @@ def train_with_gentle_sleep(
                 inputs = inputs.to(device, non_blocking=True)
                 targets = targets.to(device, non_blocking=True)
 
-            # Forward with Kuramoto coherence loss (AURA LEVEL 1).
-            # Under bf16 the model keeps oscillators and losses in fp32 itself.
-            with torch.autocast(inputs.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
-                logits, task_loss, sync_loss, coherence = model(inputs, targets, return_coherence_loss=True)
+            if grad_accum == 1:
+                # Forward with Kuramoto coherence loss (AURA LEVEL 1).
+                # Under bf16 the model keeps oscillators and losses in fp32 itself.
+                with torch.autocast(inputs.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+                    logits, task_loss, sync_loss, coherence = model(inputs, targets, return_coherence_loss=True)
 
-            # Total loss = task loss + sync loss
-            total_loss = task_loss + sync_loss
+                # Total loss = task loss + sync loss
+                total_loss = task_loss + sync_loss
 
-            # Backward
-            total_loss.backward()
+                # Backward
+                total_loss.backward()
+            else:
+                # Gradient accumulation (2026-11-07): one loader batch = one optimizer step, split into grad_accum micro-batches, so
+                # step counting, resume positions and the pause flag work exactly as without it. Losses are micro-batch means.
+                task_acc, sync_acc = 0.0, 0.0
+                for xi, yi in zip(inputs.chunk(grad_accum), targets.chunk(grad_accum)):
+                    with torch.autocast(inputs.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None):
+                        logits, tl, sl, coherence = model(xi, yi, return_coherence_loss=True)
+                    ((tl + sl) / grad_accum).backward()
+                    task_acc, sync_acc = task_acc + tl.detach() / grad_accum, sync_acc + sl.detach() / grad_accum
+                task_loss, sync_loss = task_acc, sync_acc
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # pre-clip norm, logged below
             optimizer.step()
             model.apply_julia_correction()  # damping moved out of forward()
@@ -473,6 +485,9 @@ def main():
     parser.add_argument('--save-final', action='store_true',
                         help='With --max-steps: save the weights to <checkpoint-dir>/final_model.pt at the stop')
     parser.add_argument('--seq-len', type=int, default=256, help='Context length (model positions and data windows)')
+    parser.add_argument('--grad-accum', type=int, default=1,
+                        help='Micro-batches per optimizer step: each step sees batch-size × grad-accum sequences (batch-size is the '
+                             'micro-batch held in memory). 1 = the original code path')
     parser.add_argument('--corpus', type=str, default=None,
                         help='Pre-tokenized corpus dir (train.bin/val.bin/meta.json, scripts/corpus/tokenize_corpus.py); '
                              'replaces --data-dir and --tokenizer')
@@ -581,7 +596,7 @@ def main():
 
     corpus_meta = None
     if args.corpus:  # a pre-tokenized corpus brings its own tokenizer
-        corpus_meta = json.loads((Path(args.corpus) / "meta.json").read_text())
+        corpus_meta = load_corpus(args.corpus, args.seq_len)[2]  # one dir, or several joined with commas
         args.tokenizer = corpus_meta["tokenizer"]
         print(f"Corpus: {args.corpus} ({corpus_meta['train_tokens']:,} train tokens), tokenizer {args.tokenizer}")
     print(f"Sequence length: {args.seq_len}")
@@ -652,7 +667,7 @@ def main():
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
+        batch_size=args.batch_size * args.grad_accum,  # one loader batch = one optimizer step
         shuffle=True,
         num_workers=0,
     )
@@ -798,6 +813,7 @@ def main():
         sleep=args.sleep,
         save_every_minutes=args.save_every_minutes,
         save_at_steps={int(x) for x in args.save_at_steps.split(',') if x},
+        grad_accum=args.grad_accum,
     )
 
     print()
