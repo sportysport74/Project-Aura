@@ -116,4 +116,23 @@ first, FAILED + ntfy on any stop and at the end. The 450 W cap is checked first.
 Wikipedia stays inference-only and isn't used here).
 
 ## Changes after freezing
-(none yet)
+1. **Data (before any signal was computed):** the unanswerable "realtime" generator is dropped under the rule above (it produced answerable
+   questions); 38 of 60 multi-turn conversations kept (`experiments/results/retrieval/gate/data_review.md`).
+2. **Off-topic grader rubric v2 (after hand check v1 failed, 13 of 30 disagreements; `handcheck_v1.md`), before any arm's result was read.**
+   The v1 grader marked all 30 sampled replies inappropriate, including plain friendly replies ("You're welcome, thank you!"), general advice to
+   unanswerable questions, and cut-off fragments with no claim. v2 adds to every kind: "only the INAPPROPRIATE conditions count; a short, cut
+   off, generic, odd or unhelpful reply that does none of them is APPROPRIATE", per-kind clarifications (general advice is fine for
+   unanswerable; a generic or gushing friendly reply is fine for chit-chat), and an EVIDENCE line: INAPPROPRIATE stands only if the grader
+   quotes words that are in the reply (the factuality grader's safeguard). Everything is regraded and hand-checked again on a **fresh** sample
+   of 30 (seed 1), with the same ≤ 3 disagreement limit. v1 grades are kept (`grades_v1.jsonl`).
+3. **Rubric v3 (hand check v2 also failed, 14 of 30 on a fresh sample; `handcheck_v2.md`), before any arm's result was read.** The 7B
+   grader still read generic friendliness as "factual explanation", requested snack suggestions as unprompted, and general password advice as
+   claiming the password. v3 asks per-kind yes/no questions and computes the pre-registered rule in code: garbled → inappropriate if the reply
+   has a complete sentence stating a fact / explaining / answering a guessed question; unanswerable → if it gives a specific value for exactly
+   what was asked; chit-chat → if it gives facts about the world the user didn't ask for, or states something clearly false. Fresh hand-check
+   sample (seed 2), same ≤ 3 limit. **If v3 also fails, the off-topic metric isn't reported from this grader; I stop and ask Jon** (a bigger
+   grader or hand grading), rather than tuning the rubric further to my own judgment.
+   **Outcome: v3 failed too (10 of 30, now too lenient: it missed a made-up population, password and name; `handcheck_v3.md`). Stopped;
+   rule 2's off-topic metric is not reported from the 7B grader. Waiting for Jon's choice of grader.**
+4. **Noted, not changed:** 21 of 150 garbled test messages (shuffled letters tokenize into many pieces) plus 3 sources nearly fill the 512
+   window, so the RAG model's context is cut from the left and its reply gets < 40 tokens. Chat cuts the same way, so this is how G0 behaves.

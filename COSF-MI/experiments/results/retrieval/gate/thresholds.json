@@ -1,0 +1,29 @@
+{
+ "thresholds": {
+  "g": 6.4495,
+  "c": 0.6074,
+  "s": null
+ },
+ "candidate_thresholds": {
+  "g": 6.4495,
+  "c": 0.6074,
+  "s": 0.7114
+ },
+ "auroc_tune": {
+  "g": 0.9689877699713765,
+  "c": 0.9970840726437742,
+  "s": 0.7791793871551335
+ },
+ "gate0_min_auroc": 0.85,
+ "n_tune": {
+  "ontopic": 1072,
+  "chitchat": 143,
+  "unanswerable": 66,
+  "garbled": 150
+ },
+ "rules": {
+  "g": "lowest value passing >= 95% of each clear tune group (ontopic, chitchat, unanswerable)",
+  "c": "passes >= 95% of on-topic tune as not chit-chat",
+  "s": "passes >= 95% of on-topic tune"
+ }
+}

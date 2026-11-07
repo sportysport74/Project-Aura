@@ -84,9 +84,10 @@ def main():
     p.add_argument("--max-reply-chars", type=int, default=1200)
     p.add_argument("--spot-seed", type=int, default=0, help="seed for the 20 spot-check rows")
     p.add_argument("--limit", type=int, default=0, help="only the first N questions (dry runs; 0 = all)")
+    p.add_argument("--questions", default=None, help="questions file (repo-relative); default: the 100 factuality questions")
     args = p.parse_args()
     d = ROOT / args.dir
-    qs = {q["id"]: q for q in map(json.loads, open(QUESTIONS))}
+    qs = {q["id"]: q for q in map(json.loads, open(ROOT / args.questions if args.questions else QUESTIONS))}
     if args.limit:
         qs = dict(list(qs.items())[:args.limit])
     ids = list(qs)

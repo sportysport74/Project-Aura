@@ -12,6 +12,8 @@ Usage:
     python chat_with_aura.py [checkpoint]
 """
 
+import datetime
+import json
 import sys
 import torch
 from pathlib import Path
@@ -23,6 +25,7 @@ from cosf_mi.models.cosf_oscillator import COSFOscillatorTransformer
 from cosf_mi.data.tokenizer import BPETokenizer, tokenizer_for_vocab
 
 
+GATE_FALLBACK = "checkpoints/v2base/ft/b10_s1/best_model.pt"  # the no-source chat model the gate routes to
 DEFAULT_CHECKPOINTS = [
     "checkpoints/aura_chat_distill/best_model.pt",  # default (user decision 2026-10-28): smart10 + old qwen2.5:32b distill
     "checkpoints/aura_chat_smart10/best_model.pt",  # chat model on the 10-epoch mix base (chat val 1.879)
@@ -96,11 +99,12 @@ def load_model(checkpoint_path: str = None):
 
 
 def generate_chat_reply(model, tokenizer, history, user_input, chat_format,
-                        max_tokens=80, temperature=0.7, top_k=40, device='cuda', window=256):
+                        max_tokens=80, temperature=0.7, top_k=40, device='cuda', window=256, with_ids=False):
     """
     Aura's next reply. The prompt is built piece by piece exactly as
     finetune_chat.py built its training data, and generation stops when the
     model writes the user marker ("You:"), which ends Aura's turn.
+    with_ids=True returns (reply, context ids, reply ids) for the answer-entropy diagnostic.
     """
     user_ids = tokenizer.encode(chat_format['user'])
     aura_ids = tokenizer.encode(chat_format['aura'])
@@ -112,7 +116,8 @@ def generate_chat_reply(model, tokenizer, history, user_input, chat_format,
     model.eval()
     model = model.to(device)
     # keep the newest tokens, leaving room for the reply (window = the model's max_seq_len)
-    input_ids = torch.tensor([ids[-(window - max_tokens):]], dtype=torch.long, device=device)
+    ctx = ids[-(window - max_tokens):]
+    input_ids = torch.tensor([ctx], dtype=torch.long, device=device)
     reply = []
     with torch.no_grad():
         for _ in range(max_tokens):
@@ -127,6 +132,8 @@ def generate_chat_reply(model, tokenizer, history, user_input, chat_format,
             if cut:
                 reply = reply[:-cut]
                 break
+    if with_ids:
+        return tokenizer.decode(reply).strip(), ctx, reply
     return tokenizer.decode(reply).strip()
 
 
@@ -183,9 +190,22 @@ def main():
     print()
 
     # Load model
-    # usage: chat_with_aura.py [checkpoint] [--store corpus|wiki] [--k 3]
+    # usage: chat_with_aura.py [checkpoint] [--store corpus|wiki] [--k 3] [--show-sources] [--gate [g1|g2]]
+    #   --show-sources  print each source (title or store id, similarity, first words) under the answer
+    #   --gate          store mode only: the retrieval gate (experiments/plans/retrieval_gate.md; thresholds from data/retrieval/gate/model).
+    #                   g1 (default): garbled → "not sure what you mean", chit-chat → b10_s1, low similarity → "no good sources";
+    #                   g2: every gated branch → b10_s1 without sources. Off by default until the pre-registered eval passes.
+    # Every chat turn is logged to chat_logs/<date>.jsonl (local, gitignored).
     argv = sys.argv[1:]
     store_name, k = None, 3
+    show_sources = '--show-sources' in argv
+    if show_sources:
+        argv.remove('--show-sources')
+    gate_arm = None
+    if '--gate' in argv:
+        i = argv.index('--gate')
+        gate_arm = argv[i + 1] if i + 1 < len(argv) and argv[i + 1] in ('g1', 'g2') else 'g1'
+        del argv[i:i + (2 if i + 1 < len(argv) and argv[i + 1] in ('g1', 'g2') else 1)]
     if '--store' in argv:
         i = argv.index('--store')
         store_name = argv[i + 1]
@@ -201,6 +221,8 @@ def main():
         path = {'corpus': 'data/retrieval/corpus', 'wiki': 'data/retrieval/wiki'}.get(store_name, store_name)
         print(f"Loading retrieval store: {path} (top-{k} sources per message)")
         store = Store(Path(__file__).parent / path)
+    if gate_arm and store is None:
+        sys.exit("--gate needs --store")
 
     # Load tokenizer
     print()
@@ -211,6 +233,16 @@ def main():
     # Check device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"  Device: {device}")
+    gate, fallback = None, None
+    if gate_arm:
+        from cosf_mi.chat_gate import Gate
+        print(f"Loading the retrieval gate ({gate_arm}) and the no-source chat model {GATE_FALLBACK}")
+        fallback, _, _ = load_model(GATE_FALLBACK)
+        fallback = fallback.to(device)
+        gate = Gate(Path(__file__).parent / "data/retrieval/gate/model", store, fallback, tokenizer, getattr(config, 'max_seq_len', 256))
+    log_dir = Path(__file__).parent / "chat_logs"
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / f"{datetime.date.today().isoformat()}.jsonl"
 
     # Get model stats
     print()
@@ -318,20 +350,59 @@ def main():
 
         if chat_format and not user_input.lower().startswith('temp '):
             window = getattr(config, 'max_seq_len', 256)
+            from cosf_mi.chat_gate import TEMPLATE_NOSOURCES, TEMPLATE_UNCLEAR, answer_entropy
+            entry = {"time": datetime.datetime.now().isoformat(timespec="seconds"), "message": user_input,
+                     "checkpoint": argv[0] if argv else None, "store": store_name, "gate": gate_arm}
+            passages, ctx, rids, answered_by = [], None, None, "model"
             if store is not None:  # retrieval: the sources go into this turn only; the history keeps the plain question
                 from cosf_mi.retrieval import format_prompt, tag_answer
-                passages = store.search([user_input], k=k)[0]
-                # no history: the RAG fine-tune is single-turn, and history + 3 sources would overflow the window and cut the question
-                reply = generate_chat_reply(model, tokenizer, [], format_prompt(user_input, passages),
-                                            chat_format, max_tokens=160, temperature=temperature, device=device, window=window)
-                shown = tag_answer(reply, user_input, passages)  # adds "(Wikipedia: <title>)" when a Wikipedia passage is used
+                if gate is not None:
+                    sig = gate.signals([user_input], k=k)[0]
+                    branch = gate.route(sig)
+                    passages = sig["sources"]
+                    entry.update(g=round(sig["g"], 3), c=round(sig["c"], 3), branch=branch)
+                else:
+                    passages = store.search([user_input], k=k)[0]
+                    branch = "rag"
+                entry["top_similarity"] = passages[0]["score"] if passages else None
+                if branch == "rag":
+                    # no history: the RAG fine-tune is single-turn, and history + 3 sources would overflow the window and cut the question
+                    reply, ctx, rids = generate_chat_reply(model, tokenizer, [], format_prompt(user_input, passages), chat_format,
+                                                           max_tokens=160, temperature=temperature, device=device, window=window,
+                                                           with_ids=True)
+                    shown = tag_answer(reply, user_input, passages)  # adds "(Wikipedia: <title>)" when a Wikipedia passage is used
+                elif gate_arm == "g1" and branch in ("unclear", "nosources"):
+                    reply = shown = TEMPLATE_UNCLEAR if branch == "unclear" else TEMPLATE_NOSOURCES
+                    answered_by = "template"
+                else:  # chit-chat (both arms), or every gated branch in g2: the no-source chat model
+                    reply, ctx, rids = generate_chat_reply(fallback, tokenizer, [], user_input, chat_format, max_tokens=160,
+                                                           temperature=temperature, device=device, window=window, with_ids=True)
+                    shown, answered_by = reply, GATE_FALLBACK
+                    passages = []
             else:
-                reply = generate_chat_reply(model, tokenizer, conversation_history[-4:], user_input,
-                                            chat_format, max_tokens=80 if window <= 256 else 160, temperature=temperature,
-                                            device=device, window=window)
+                branch = None
+                reply, ctx, rids = generate_chat_reply(model, tokenizer, conversation_history[-4:], user_input,
+                                                       chat_format, max_tokens=80 if window <= 256 else 160, temperature=temperature,
+                                                       device=device, window=window, with_ids=True)
                 shown = reply
+            ent = None
+            if rids:
+                ent = answer_entropy(fallback if answered_by == GATE_FALLBACK else model, [ctx], [rids], window)[0]
             print(f"AURA: {shown}")
+            if show_sources and passages:
+                for n, p in enumerate(passages, 1):
+                    label = p.get("title") or f"{p.get('source', '?')} #{p['id']}"
+                    print(f"   [{n}] {label} (similarity {p['score']:.3f}): {' '.join(p['text'].split()[:20])}...")
+            if show_sources and branch not in (None, "rag"):
+                print(f"   (gate: {branch}; similarity {entry.get('top_similarity')}, garble {entry.get('g')}, chit-chat {entry.get('c')})")
             print()
+            entry.update(branch=branch, answered_by=answered_by, entropy=None if ent is None else round(ent, 3), reply=shown,
+                         sources=[{"id": p["id"], "score": p["score"]} for p in passages])
+            try:
+                with open(log_path, "a") as lf:
+                    lf.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            except OSError:
+                pass
             conversation_history.append((user_input, reply))
             continue
 
