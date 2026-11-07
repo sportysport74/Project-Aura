@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-07 ~12:30: retrieval gate DONE (RESULTS.md; `experiments/plans/retrieval_gate.md`).** G1 passed (off-topic inappropriate 42% →
+27%, factuality unchanged) → **on by default in `chat_with_aura.py --store`** (`--no-gate` to turn off), plus the previous-turn history (multi-turn
+step A: 0.090 → 0.353). Open issues: "hi"/"lol" get "I'm not sure what you mean" (garble check runs before chit-chat; a reorder needs its own
+eval); unanswerable questions unhelped (62%); the "no good sources" reply is unused (similarity AUROC 0.78). No LLM grader passed the off-topic
+hand check (7B ×3, 32B-AWQ ×1; 32B is in `~/.cache/huggingface`, ~19 GB): rule 2 used blind hand grades. Chat turns log to `chat_logs/`.
+
 **2026-11-07 07:26: retrieval re-score DONE (RESULTS.md; pre-registered `experiments/plans/retrieval_rescore.md`).** With the sources excluded
 from the repetition penalty: R2c 0.512 vs R0 0.308 (+0.204, CI [+0.150, +0.260]), false claims 33% → 13%; Wikipedia store still worse (−0.073) →
 corpus stays the default store. Both evals agree on both verdicts. Copying of ≥ 8 source words rose to 28% (R2c). `chat_with_aura.py --store

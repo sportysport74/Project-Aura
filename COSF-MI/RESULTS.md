@@ -4,6 +4,44 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-07 — Retrieval gate, answer entropy, multi-turn step A (pre-registered; gate G1 and history adopted, with caveats)
+
+- **Design** (`experiments/plans/retrieval_gate.md`, frozen before code; deviations listed there under "Changes after freezing"). Three signals per
+  message: g = b10_s1's per-token NLL of the message (garbled), c = max bge similarity to chit-chat tune examples, s = top-1 source similarity.
+  Thresholds from tune splits only. Arms: G0 = RAG model + sources always (today); **G1** = garbled → "I'm not sure what you mean, can you say it
+  another way?", chit-chat → b10_s1 without sources, low similarity → "I don't have good sources on that, so I'd rather not guess."; G2 = every
+  gated branch → b10_s1. Test sets: Qwen-written chit-chat (+ 20 hand-written very short messages), unanswerable questions (personal, niche,
+  recent; the "realtime" generator was dropped for writing answerable questions), programmatic garbled text (word salad held out of tuning).
+  `experiments/results/retrieval/gate/report.md`.
+- **Grading deviation:** no LLM grader passed the pre-registered hand check on the off-topic set (Qwen2.5-7B: 13, 14 and 10 of 30
+  disagreements with three rubrics; Qwen2.5-32B-AWQ: 15 of 30; limit 3). Per Jon's fallback, **rule 2 uses blind hand grades** (by Claude, the
+  same judge as the hand checks; criteria written down before grading): 150 test messages (50 per kind), one RAG and one b10_s1 reply each, 300
+  replies shuffled with model labels hidden (`grades_hand.jsonl`, `blind_key.json`). Single grader, no second rater.
+- **Gate 0 (tune):** g AUROC 0.969 and c 0.997 pass; **s 0.779 fails (< 0.85), so the "no good sources" reply never fires.**
+
+| rule | G0 | **G1** | G2 |
+|---|---|---|---|
+| 1. factuality, 100 questions (≥ G0 − 0.02) | 0.512 | 0.512 (± 0.000, PASS) | 0.512 (PASS) |
+| 2. inappropriate answers, 150 off-topic messages (CI < 0) | 42.0% | **27.3%, −0.147 [−0.213, −0.087], PASS** | 48.7%, +0.067 [0.000, +0.133], FAIL |
+| … garbled / word salad (unseen type) | 52% / 96% | 12% / 27% | 64% / 73% |
+| … chit-chat / unanswerable | 12% / 62% | 6% / 64% | 18% / 64% |
+| 3. "not sure" reply: mis-fires on 1,072 on-topic test questions | | 0.4% (limit 10%) | |
+| 4. chat quality, 30 messages: turn ended / repeated 4-gram | 83% / 0% | 97% / 3% (PASS) | 97% / 3% |
+
+- **Verdict (pre-registered): G1 passes rules 1, 2 and 4 and becomes the default in chat store mode; G2 fails rule 2** (b10_s1 without sources
+  answers garbled input with invented facts as often as the RAG model does).
+- **Caveats, measured:** (a) **all 20 very short messages ("hi", "lol", "ok") get the "not sure what you mean" reply**: one-word messages have a
+  very high per-token NLL (8-17 vs threshold 6.4), and the garbled check runs before the chit-chat check. The rule scores a template as
+  appropriate, so this doesn't show in rule 2, but it's a visible defect. Exploratory, not a result: checking chit-chat first sends 18/20 of them to
+  chit-chat but 10/50 keyboard-mash messages to b10_s1. (b) **Unanswerable questions are not helped at all** (62% → 64%): they look like normal
+  questions on every signal. (c) 21/150 garbled RAG prompts fill the 512 window (G0's replies to them are cut short).
+- **Answer entropy (diagnostic, Jon's change 2): predicts false claims, weakly.** Mean raw-token entropy, re-score answers: RAG + sources
+  AUROC **0.677 [0.574, 0.769]** (false 1.573 vs not 1.408 nats); b10_s1 no sources 0.666 [0.589, 0.739]. Too weak to gate on by itself; logged
+  per chat turn.
+- **Multi-turn step A: history helps; adopted for chat.** 38 two-turn conversations (Qwen-written follow-ups like "Why do they do that?", 22 of 60
+  dropped by hand), RAG s0+s1 × 3 samples: follow-up alone M0 **0.090**, with the previous turn + a query of both questions (2 sources at 60
+  words) M1 **0.353**, +0.263 [+0.182, +0.346]. No context hit the window. Chat encodes piece by piece; the eval used the joined encoding.
+
 ## 2026-11-07 — Retrieval re-score: sources excluded from the repetition penalty (pre-registered second eval)
 
 - **Design** (`experiments/plans/retrieval_rescore.md`, committed 2026-11-07 06:42 before running): identical to the 2026-11-06 eval (same 9

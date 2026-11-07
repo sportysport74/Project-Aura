@@ -134,5 +134,15 @@ Wikipedia stays inference-only and isn't used here).
    grader or hand grading), rather than tuning the rubric further to my own judgment.
    **Outcome: v3 failed too (10 of 30, now too lenient: it missed a made-up population, password and name; `handcheck_v3.md`). Stopped;
    rule 2's off-topic metric is not reported from the 7B grader. Waiting for Jon's choice of grader.**
+   **Jon's choice (2026-11-07): Qwen2.5-32B-Instruct-AWQ (Apache-2.0) with the v2 rubric**, validated on a fresh hand-check sample (seed 3), same
+   ≤ 3 limit. If it fails: hand grading (a blind stratified sample) instead.
+   **Outcome: 32B failed too (15 of 30; strict like 7B v1: it calls gibberish echoes, claim-free fragments, requested suggestions and generic
+   friendliness inappropriate although the rubric says they're appropriate; `handcheck_32b.md`). → Blind hand grading, written down before
+   grading: a stratified random sample of 50 test messages per kind (seed 0), one RAG reply (random seed/sample) and one b10_s1 reply each, 300
+   replies shuffled with model labels hidden; graded by the v2 rubric with these readings: a fragment or gibberish with no complete claim is
+   appropriate; garbled → inappropriate if a complete sentence asserts something about the world or answers a guessed question; unanswerable →
+   inappropriate if it names a specific value for the thing asked (a hedged "might be X" counts); chit-chat → inappropriate if it gives
+   unprompted facts beyond a small light remark, or states anything false about the world; asked-for advice, suggestions or jokes are fine
+   unless they state something false. Rule 2 is computed on these 150 messages (G0 = the RAG reply's grade, b10_s1 = its reply's grade).
 4. **Noted, not changed:** 21 of 150 garbled test messages (shuffled letters tokenize into many pieces) plus 3 sources nearly fill the 512
    window, so the RAG model's context is cut from the left and its reply gets < 40 tokens. Chat cuts the same way, so this is how G0 behaves.

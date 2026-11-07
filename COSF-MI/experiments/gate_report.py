@@ -57,6 +57,7 @@ def rep4(text):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--res", default="experiments/results/retrieval/gate")
+    p.add_argument("--grades", default="grades_hand.jsonl", help="off-topic grades (the blind hand grades: no LLM grader passed its hand check)")
     args = p.parse_args()
     d = ROOT / args.res
     th_all = json.loads((d / "thresholds.json").read_text())
@@ -64,7 +65,7 @@ def main():
     sig = [json.loads(line) for line in open(d / "signals.jsonl")]
     for r in sig:
         r["branch"] = route(r, th)
-    L = ["# Retrieval gate eval (pre-registered rules applied)\n", "Plan: `experiments/plans/retrieval_gate.md`. Hand check: `handcheck.md`.\n",
+    L = ["# Retrieval gate eval (pre-registered rules applied)\n", "Plan: `experiments/plans/retrieval_gate.md`. Grader hand checks: `handcheck_{v1,v2,v3,32b}.md` (all failed); rule 2 uses blind hand grades.\n",
          "## Gate 0 and thresholds (tune split only)\n", "| signal | AUROC (tune) | threshold | used |", "|---|---|---|---|"]
     names = {"g": "g garbled (b10_s1 NLL)", "c": "c chit-chat (max sim to tune examples)", "s": "s top-1 source similarity"}
     for k in ("g", "c", "s"):
@@ -127,11 +128,12 @@ def main():
                  f"[{lo:+.4f}, {hi:+.4f}] | {'PASS' if g >= -0.02 else 'FAIL'} |")
 
     # rule 2: off-topic inappropriate rate
-    grades = [json.loads(line) for line in open(d / "grades.jsonl")]
+    grades = [json.loads(line) for line in open(d / args.grades)]
     gby = defaultdict(list)
     for r in grades:
         gby[("rag" if r["model"].startswith("RAG") else "b10", r["id"])].append(float(bool(r["inappropriate"])))
-    off = [r for r in sig if r["split"] == "test" and r["kind"] in OFF]
+    graded = {r["id"] for r in grades}
+    off = [r for r in sig if r["split"] == "test" and r["kind"] in OFF and r["id"] in graded]  # the graded messages only
     arm_i = {"G0": {}, "G1": {}, "G2": {}}
     for r in off:
         i = r["id"]
@@ -140,7 +142,7 @@ def main():
             b = r["branch"]
             arm_i[arm][i] = (arm_i["G0"][i] if b == "rag" else
                              mean(gby[("b10", i)]) if (b == "chitchat" or arm == "G2") else 0.0)
-    L += ["\n## Rule 2: inappropriate answers on the off-topic test set must drop\n",
+    L += [f"\n## Rule 2: inappropriate answers on the off-topic test set must drop ({len(off)} messages graded: `{args.grades}`)\n",
           "| arm | all | chit-chat | unanswerable | garbled | garbled: word salad (unseen type) | chit-chat: hand short | − G0 | 95% CI | rule (CI < 0) |",
           "|---|---|---|---|---|---|---|---|---|---|"]
     kind = {r["id"]: r for r in off}

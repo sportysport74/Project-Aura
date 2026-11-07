@@ -192,16 +192,21 @@ def main():
     # Load model
     # usage: chat_with_aura.py [checkpoint] [--store corpus|wiki] [--k 3] [--show-sources] [--gate [g1|g2]]
     #   --show-sources  print each source (title or store id, similarity, first words) under the answer
-    #   --gate          store mode only: the retrieval gate (experiments/plans/retrieval_gate.md; thresholds from data/retrieval/gate/model).
-    #                   g1 (default): garbled → "not sure what you mean", chit-chat → b10_s1, low similarity → "no good sources";
-    #                   g2: every gated branch → b10_s1 without sources. Off by default until the pre-registered eval passes.
+    #   --gate g1|g2    store mode: the retrieval gate (experiments/plans/retrieval_gate.md; thresholds from data/retrieval/gate/model).
+    #                   g1 is ON by default in store mode (it passed the pre-registered eval, RESULTS 2026-11-07): garbled → "not sure
+    #                   what you mean", chit-chat → b10_s1 without sources (the "no good sources" branch is unused: its signal failed gate 0).
+    #                   g2: every gated branch → b10_s1. --no-gate: always answer with the RAG model + sources.
+    #   Store mode also keeps the previous RAG turn (multi-turn step A, adopted): query = previous question + this one, 2 sources at 60 words.
     # Every chat turn is logged to chat_logs/<date>.jsonl (local, gitignored).
     argv = sys.argv[1:]
     store_name, k = None, 3
     show_sources = '--show-sources' in argv
     if show_sources:
         argv.remove('--show-sources')
-    gate_arm = None
+    gate_arm = 'g1'
+    if '--no-gate' in argv:
+        argv.remove('--no-gate')
+        gate_arm = None
     if '--gate' in argv:
         i = argv.index('--gate')
         gate_arm = argv[i + 1] if i + 1 < len(argv) and argv[i + 1] in ('g1', 'g2') else 'g1'
@@ -221,8 +226,8 @@ def main():
         path = {'corpus': 'data/retrieval/corpus', 'wiki': 'data/retrieval/wiki'}.get(store_name, store_name)
         print(f"Loading retrieval store: {path} (top-{k} sources per message)")
         store = Store(Path(__file__).parent / path)
-    if gate_arm and store is None:
-        sys.exit("--gate needs --store")
+    if store is None:
+        gate_arm = None
 
     # Load tokenizer
     print()
@@ -278,7 +283,7 @@ def main():
     print()
     if chat_format:
         if store is not None:
-            print(f"  Mode: CHAT with sources from {path} (each question answered on its own, no memory of earlier turns)")
+            print(f"  Mode: CHAT with sources from {path} (gate: {gate_arm or 'off'}; remembers the previous question and answer)")
         else:
             print("  Mode: CHAT (AURA remembers the last 4 turns)")
         print(f"  Temperature: 0.7, top-k 40, repetition penalty {REPETITION_PENALTY}, no repeated {NO_REPEAT_NGRAM}-grams")
@@ -307,6 +312,7 @@ def main():
     print()
 
     conversation_history = []  # (you, aura) turns, chat mode only
+    last_rag = None  # store mode: the previous (question, answer) turn answered with sources (multi-turn step A)
     temperature = 0.7
 
     while True:
@@ -344,6 +350,7 @@ def main():
 
         if user_input.lower() == 'reset':
             conversation_history = []
+            last_rag = None
             print("(New conversation)")
             print()
             continue
@@ -366,19 +373,29 @@ def main():
                     branch = "rag"
                 entry["top_similarity"] = passages[0]["score"] if passages else None
                 if branch == "rag":
-                    # no history: the RAG fine-tune is single-turn, and history + 3 sources would overflow the window and cut the question
-                    reply, ctx, rids = generate_chat_reply(model, tokenizer, [], format_prompt(user_input, passages), chat_format,
-                                                           max_tokens=160, temperature=temperature, device=device, window=window,
-                                                           with_ids=True)
+                    history, max_words = [], 75
+                    if last_rag is not None:
+                        # multi-turn step A (M1, adopted): history = the previous RAG turn, query = both questions, 2 sources at 60 words
+                        # so the window holds history + sources + answer. (The eval used the joined encoding; chat encodes piece by piece.)
+                        passages = store.search([last_rag[0] + " " + user_input], k=2)[0]
+                        history, max_words = [last_rag], 60
+                        entry["history"] = True
+                    reply, ctx, rids = generate_chat_reply(model, tokenizer, history, format_prompt(user_input, passages, max_words=max_words),
+                                                           chat_format, max_tokens=160, temperature=temperature, device=device,
+                                                           window=window, with_ids=True)
                     shown = tag_answer(reply, user_input, passages)  # adds "(Wikipedia: <title>)" when a Wikipedia passage is used
+                    last_rag = (user_input, reply)
                 elif gate_arm == "g1" and branch in ("unclear", "nosources"):
                     reply = shown = TEMPLATE_UNCLEAR if branch == "unclear" else TEMPLATE_NOSOURCES
                     answered_by = "template"
+                    last_rag = None
+                    passages = []
                 else:  # chit-chat (both arms), or every gated branch in g2: the no-source chat model
                     reply, ctx, rids = generate_chat_reply(fallback, tokenizer, [], user_input, chat_format, max_tokens=160,
                                                            temperature=temperature, device=device, window=window, with_ids=True)
                     shown, answered_by = reply, GATE_FALLBACK
                     passages = []
+                    last_rag = None
             else:
                 branch = None
                 reply, ctx, rids = generate_chat_reply(model, tokenizer, conversation_history[-4:], user_input,
