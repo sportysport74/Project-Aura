@@ -105,3 +105,37 @@ Programmatic arithmetic only (licence "ours"). No teacher, no third-party data.
 - Eval prompt: "a × b = ?" (one of the four training templates), transcript encoded in one go ("You: … \nAura:"), greedy, max 40 new tokens.
 - Unrelated pre-existing test failures: `tests/test_constants.py` (import error) and `test_phi_decomposition::test_assign_shells`, both
   from the initial commit; nothing in this plan touches them.
+
+## Addendum 1 (2026-11-08 ~08:50): step 1 floor check and compute matching, before any step-2 run
+
+Run `runs/20261108-080610` (08:06-08:21, no faults). vanilla2 s25, arithmetic only, 200M tokens, seeds 1-2: val loss 0.5105 / 0.5101.
+Full table: `experiments/results/settle_retest/floor.md`.
+
+- **Primary cells (n ≥ 50, mean in [20%, 60%]): 3, the minimum the plan allows to go on.**
+
+  | cell | n | seed 1 | seed 2 | mean |
+  |---|---|---|---|---|
+  | ÷ 3x2 | 200 | 53.0% | 62.5% | 57.8% |
+  | × 2x2 | 200 | 49.5% | 49.0% | 49.2% |
+  | ÷ 4x1 | 200 | 41.0% | 55.5% | 48.3% |
+
+  Primary set = 600 problems. **Difficulty order (frozen rule): easier half = ÷ 3x2; harder half = × 2x2, ÷ 4x1.**
+- Just outside the range: ÷ 3x3 60.5%, ÷ 3x4 62.3% (easy); ÷ 4x2 17.8%, × 2x3 17.0% (hard). Easy: × with a 1-digit operand (74-99%),
+  ÷ with a 1- or 2-digit quotient (96-100%). Hard: × with both operands ≥ 2 digits beyond 2x2 (1-17%), ÷ with a 4-digit quotient and a
+  ≥ 2-digit divisor (13-18%). Secondary + / −: + 2x2 98%, + 3x3 92%, − 2x2 46%, − 3x3 33% (+ and − are 5% of the mix each).
+- **Seed spread is large per cell:** up to 14.5 points (÷ 4x1: 41.0 vs 55.5; ÷ 3x4: 55.5 vs 69.0). The seed level of the two-level
+  bootstrap will be wide, and the all-3-seeds rule is demanding.
+- **Compute matching** (600-step probes at 450 W, median tok/s after warm-up; scratch dirs, nothing evaluated):
+
+  | arm | tok/s | params |
+  |---|---|---|
+  | A vanilla2 L8 | 655.8k | 23.4M |
+  | **B settling T = 8** | **190.8k** | 27.2M |
+  | C repeat ×6 / ×7 / **×8** / ×9 / ×10 / ×12 | 226.6k / 196.6k / **188.4k** / 174.4k / 165.6k / 141.9k | 27.2M |
+  | D vanilla2 L20 / L24 / L25 / L26 / **L27** / L28 / L32 | 244.4k / 198.2k / 202.0k / 181.1k / **189.2k** / 173.9k / 143.9k | 57.1M at L27 |
+
+  **N = 8** (closest to B, 1.3% slower, so slightly more compute); **L_D = 27** (closest, 0.8% slower). The probes aren't monotone in L
+  (L26 slower than L27), so the measurement noise is about ±5%, and the matching is good to that. **D has 2.1× B's parameters** (57.1M vs
+  27.2M): compute is matched, parameters are not, as the plan says.
+- Step 2 as frozen: A seed 3, then B (`--settle settle --settle-T 8 --settle-K 1.0 --settle-zero-init`), C (`--settle repeat
+  --settle-repeats 8 --settle-zero-init`), D (`--n-layers 27`), seeds 1-3 each: 10 runs, ~19 min each for B/C/D ≈ 3 h. Waiting for Jon.

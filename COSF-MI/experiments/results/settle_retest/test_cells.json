@@ -1,0 +1,172 @@
+{
+ "× 1x2": {
+  "n": 68,
+  "heldout_pool": 68,
+  "primary_eligible": true
+ },
+ "× 1x3": {
+  "n": 200,
+  "heldout_pool": 710,
+  "primary_eligible": true
+ },
+ "× 1x4": {
+  "n": 200,
+  "heldout_pool": 7205,
+  "primary_eligible": true
+ },
+ "× 2x1": {
+  "n": 83,
+  "heldout_pool": 83,
+  "primary_eligible": true
+ },
+ "× 2x2": {
+  "n": 200,
+  "heldout_pool": 785,
+  "primary_eligible": true
+ },
+ "× 2x3": {
+  "n": 200,
+  "heldout_pool": 8020,
+  "primary_eligible": true
+ },
+ "× 2x4": {
+  "n": 200,
+  "heldout_pool": 80597,
+  "primary_eligible": true
+ },
+ "× 3x1": {
+  "n": 200,
+  "heldout_pool": 733,
+  "primary_eligible": true
+ },
+ "× 3x2": {
+  "n": 200,
+  "heldout_pool": 8027,
+  "primary_eligible": true
+ },
+ "× 3x3": {
+  "n": 200,
+  "heldout_pool": 81354,
+  "primary_eligible": true
+ },
+ "× 3x4": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "× 4x1": {
+  "n": 200,
+  "heldout_pool": 7158,
+  "primary_eligible": true
+ },
+ "× 4x2": {
+  "n": 200,
+  "heldout_pool": 80807,
+  "primary_eligible": true
+ },
+ "× 4x3": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "× 4x4": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "÷ 1x2": {
+  "n": 75,
+  "heldout_pool": 75,
+  "primary_eligible": true
+ },
+ "÷ 1x3": {
+  "n": 200,
+  "heldout_pool": 777,
+  "primary_eligible": true
+ },
+ "÷ 1x4": {
+  "n": 200,
+  "heldout_pool": 7287,
+  "primary_eligible": true
+ },
+ "÷ 2x1": {
+  "n": 63,
+  "heldout_pool": 63,
+  "primary_eligible": true
+ },
+ "÷ 2x2": {
+  "n": 200,
+  "heldout_pool": 798,
+  "primary_eligible": true
+ },
+ "÷ 2x3": {
+  "n": 200,
+  "heldout_pool": 8120,
+  "primary_eligible": true
+ },
+ "÷ 2x4": {
+  "n": 200,
+  "heldout_pool": 80477,
+  "primary_eligible": true
+ },
+ "÷ 3x1": {
+  "n": 200,
+  "heldout_pool": 744,
+  "primary_eligible": true
+ },
+ "÷ 3x2": {
+  "n": 200,
+  "heldout_pool": 8085,
+  "primary_eligible": true
+ },
+ "÷ 3x3": {
+  "n": 200,
+  "heldout_pool": 80935,
+  "primary_eligible": true
+ },
+ "÷ 3x4": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "÷ 4x1": {
+  "n": 200,
+  "heldout_pool": 7186,
+  "primary_eligible": true
+ },
+ "÷ 4x2": {
+  "n": 200,
+  "heldout_pool": 81001,
+  "primary_eligible": true
+ },
+ "÷ 4x3": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "÷ 4x4": {
+  "n": 200,
+  "heldout_pool": null,
+  "primary_eligible": true
+ },
+ "+ 2x2": {
+  "n": 50,
+  "heldout_pool": 789,
+  "primary_eligible": false
+ },
+ "+ 3x3": {
+  "n": 50,
+  "heldout_pool": 80626,
+  "primary_eligible": false
+ },
+ "- 2x2": {
+  "n": 50,
+  "heldout_pool": 814,
+  "primary_eligible": false
+ },
+ "- 3x3": {
+  "n": 50,
+  "heldout_pool": 81265,
+  "primary_eligible": false
+ }
+}
