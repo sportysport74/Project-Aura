@@ -2,7 +2,7 @@
 
 One page. Measured results, with their evidence, are in [`COSF-MI/RESULTS.md`](COSF-MI/RESULTS.md); ideas are in
 [`COSF-MI/experiments/VISION.md`](COSF-MI/experiments/VISION.md); plans (each written and committed before it ran) are in
-[`COSF-MI/experiments/plans/`](COSF-MI/experiments/plans/). The top-level `README.md` describes the original oscillator design and is out of date.
+[`COSF-MI/experiments/plans/`](COSF-MI/experiments/plans/). The top-level [`README.md`](README.md) is the overview; [`HISTORY.md`](HISTORY.md) tells how the project got here.
 
 ## Right now
 

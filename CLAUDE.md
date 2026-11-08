@@ -105,6 +105,12 @@ into things that can be built and tested.
 ## Setup status
 Linux/WSL migration checklist. **Read this first; tick items off (with date) as they get done, add new ones as they appear.**
 
+**2026-11-07 22:28: v3 steps 1-2 RESUMED** (Jon set 450 W; run `COSF-MI/runs/20261107-222823`, `TRAIN_CMD="bash scripts/v3_checks_queue.sh"`). lr 4.5e-4 resumed from latest.pt at step 1,732 (98% util, 451 W, 25.5 GiB), then 6e-4 (+ a 9e-4 edge run if 6e-4 wins). Note: `.train_cmd` is `train_overnight.py --config`, NOT the queue: a launch without TRAIN_CMD (run `20261107-222745`) started the wrong trainer and was killed at step 0 (marked ABORTED).
+
+**2026-11-07 ~17:41: PC CRASH (hard power-off) during step 2, NOT resumed (waiting for Jon).** Kernel-Power 41 with Bugcheck 0, no BSOD, no WHEA, no nvlddmkm event; GPU telemetry flat to the last row (17:41:07: 450 W, 73.6 °C, 98% util, Gen4 x8). 5th no-bugcheck power-off (10-02, 10-13, 10-15 ×2) → PSU / 12V-2x6 / wall power, not software. Done: step 1 (PASS), lr 2e-4. lr 4.5e-4 died at step ~2,310/3,052; its latest.pt is from 17:25. lr 6e-4 not started. HWiNFO logging had stopped 11-04 (no rail data). **Power limit reset to 575 W: re-cap to 450 W before resuming.** Windows-wide sweep (all logs, 17:20-17:46): nothing before the cut. **Crash dumps are broken since this boot** (volmgr 45 / Kernel-Dump 5: pagefile is only on D:, so no dump can be written; fix: a small pagefile on C: or a DedicatedDumpFile). Kernel-Power 41 count in 60 days: 11 (9× bugcheck 0, back to 09-11; 2× 0x133 on 10-26 and 10-29). The previous boot was 10-29, so the D:-only pagefile probably took effect only today. Not a Windows Update restart (no 1074 since 10-25; only Defender/Store updates). Jon: PC was **off** when he walked in (he powered it on at 17:43), and it runs on a CyberPower 1500 UPS. The UPS has no USB link to the PC and no PowerPanel, so there's no UPS log. Suspects: PSU protection trip (OCP/OPP from 5090 transients), the 12V-2x6 cable, UPS overload, or UPS battery transfer (simulated-sine model + active-PFC PSU). Ryzen 9 5900X, MSI MEG X570 UNIFY.
+**Platform upgrade in a few days (Jon, 11-07):** Ryzen 9 9950X3D + 64 GB RAM + ASUS ROG Crosshair X870E Dark Hero, replacing the 5900X/X570. Before it: `wsl --export` backup to D:. During it: check PSU wattage/age, the 12V-2x6 cable seating, and NIC placement (keep the GPU at x16). After it: memtest, .wslconfig (processors/memory), a pagefile on C:, power cap 450 W, then a short training soak before step 3. PSU: Lian Li EDGE 1300 W Platinum (ATX 3.1): wattage is not the issue; remaining suspects are the 12V-2x6 cable, a faulty PSU unit, or the UPS (overload/transfer). Test: run the soak with the PC on the wall (surge strip), not the UPS.
+
+
 **2026-11-07 13:29: Aura v3 steps 1-2 LAUNCHED** (approved; run `COSF-MI/runs/20261107-132900`, `scripts/v3_checks_queue.sh`, results
 `COSF-MI/experiments/results/v3_checks/report.md`, checkpoints `checkpoints/v3_checks/`). Scaling check (l100 6e-4 vs x330 3e-4, seeds 1-2) then
 lr check (x330 2e-4/4.5e-4/6e-4, edge rule). ETA ~5-6 h. New code: `--grad-accum`, `--corpus a,b` (tests pass). **Jon's conditions: step 3
@@ -691,9 +697,9 @@ Open:
 - lr: 6e-4 was the low edge of the l100 grid, 3e-4 was worse (RESULTS 2026-11-06); re-check if the width or the batch changes.
 
 ### GitHub cleanup checklist (before the next push; Jon, 2026-11-07)
-- [ ] README: Jon's draft (pasted 2026-11-07), corrected: the oscillator-vs-standard comparison is finished (standard won by 0.27-0.33 on
+- [x] (2026-11-07) README: Jon's draft (pasted 2026-11-07), corrected: the oscillator-vs-standard comparison is finished (standard won by 0.27-0.33 on
   11-03) and every model since 11-04 is vanilla2. Keep its "What is not established" and "How results are reported" sections.
-- [ ] HISTORY.md: Jon's draft (Phases 1-6 + "What carried through" table; **not received yet, ask for it**) + Phases 7-8 and "Where the
+- [x] (2026-11-07) HISTORY.md: Jon's draft (Phases 1-6 + "What carried through" table; **not received yet, ask for it**) + Phases 7-8 and "Where the
   oscillators stand" from `docs/cleanup/HISTORY_additions.md`; update the table to match; delete nothing.
 - [ ] Then merge `distill-investigation` / push (Jon's call). Scan for secrets (ntfy topic!) and `/home/` paths first.
 
