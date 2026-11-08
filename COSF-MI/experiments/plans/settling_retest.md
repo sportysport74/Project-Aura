@@ -89,3 +89,19 @@ Programmatic arithmetic only (licence "ours"). No teacher, no third-party data.
 - Every CI: two-level bootstrap (seeds, then problems within seed). Pass also needs B > each control on all 3 seeds individually.
 - Test cells: all held-out problems up to 200 per cell, actual n recorded; cells with n < 50 are secondary only.
 - Step 1 ends the queue; Jon reads Addendum 1 before step 2.
+
+## Addendum 0 (2026-11-08, while building, before any run): implementation notes
+
+- **Init bug found and fixed for this plan's arms.** With `--linear-init gpt` (part of vanilla2), the model re-initialized every
+  `nn.Linear` inside each block after construction, **including the settling module's**: W_in got std 0.02 instead of 1/√d (so φ⁰ started
+  near 0, not at unit-scale phases) and W_out got std 0.02 (not the GPT residual rule). This also applied to the 2026-11-04 settling runs
+  (`settling_vanilla2.md`), so their settling started from near-zero phases. With `--settle-zero-init` the loop now skips the settling
+  module, so arms B and C keep the module's own init (W_in 1/√d, W_out = 0). The old path (no zero-init) is unchanged, so the 11-04 runs
+  stay reproducible. Unit test `test_zero_init_is_exact_noop`: B and C give logits identical to vanilla2 with the same weights at init.
+- Arm D uses `--n-layers L_D` on the s25 size instead of a separate `s25_deep` size entry (same model).
+- Data: `data/arith_settle/src` (build_arith_plain.py, n = 4,000,000, mix ×0.45 ÷0.45 +0.05 −0.05, seed 0) →
+  `data/arith_settle/tok24k`: 185.4M train tokens, 4.0M problems; val 0.09M tokens, 2,000 problems. 200M tokens per run = 12,207 steps
+  (32 × 512), so the stream is seen ~1.08 times (2 epochs, cut at the step budget).
+- Eval prompt: "a × b = ?" (one of the four training templates), transcript encoded in one go ("You: … \nAura:"), greedy, max 40 new tokens.
+- Unrelated pre-existing test failures: `tests/test_constants.py` (import error) and `test_phi_decomposition::test_assign_shells`, both
+  from the initial commit; nothing in this plan touches them.

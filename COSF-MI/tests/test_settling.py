@@ -89,3 +89,28 @@ def test_diagnostics_and_controller():
     assert len(out["modules"]) == 2 and len(out["modules"][0]["R"]) == 8 and len(out["modules"][0]["lyap"]) == 8
     assert out["controller_signal"] == "lyapunov"
     assert float(model.blocks[0].settle.K) != k0  # the controller moved K
+
+
+def test_zero_init_is_exact_noop():
+    """Settling retest (2026-11-08): with --settle-zero-init, arms B (settle) and C (repeat) start as exact no-ops: same logits
+    as the plain vanilla2 model with the same backbone weights."""
+    for mode, extra in (("settle", {}), ("repeat", {"settle_repeats": 3})):
+        torch.manual_seed(0)
+        base = COSFOscillatorTransformer(cfg()).eval()
+        torch.manual_seed(0)
+        m = COSFOscillatorTransformer(cfg(settle_mode=mode, settle_zero_init=True, **extra)).eval()
+        missing, unexpected = m.load_state_dict(base.state_dict(), strict=False)
+        assert not unexpected and all(".settle." in k for k in missing)
+        x = torch.randint(0, 500, (2, 16))
+        with torch.no_grad():
+            assert torch.equal(base(x), m(x)), mode
+        assert all(b.settle.w_out.weight.abs().max() == 0 for b in m.blocks)
+
+
+def test_zero_init_still_learns():
+    """W_out = 0 must not freeze the module: one gradient step moves W_out away from 0."""
+    torch.manual_seed(0)
+    mod = SettlingModule(32, 2, T=4, zero_init=True)
+    x = torch.randn(2, 8, 32)
+    (mod(x) * torch.randn(2, 8, 32)).sum().backward()
+    assert mod.w_out.weight.grad.abs().max() > 0

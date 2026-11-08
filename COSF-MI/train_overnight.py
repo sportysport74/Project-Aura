@@ -456,6 +456,8 @@ def main():
     parser.add_argument('--settle-clamp', type=str, default='none', choices=['none', 'phi', 'two'])
     parser.add_argument('--settle-controller', type=str, default='none', choices=['none', 'auto'])
     parser.add_argument('--settle-repeats', type=int, default=1, help='R4 control: plain-block repeats (set for compute matching)')
+    parser.add_argument('--settle-zero-init', action='store_true', help='settling/repeat module starts as an exact no-op (W_out = 0)')
+    parser.add_argument('--n-layers', type=int, default=0, help='override the size\'s layer count (0 = keep; settling retest deeper control)')
     parser.add_argument('--deterministic', action='store_true',
                         help='torch.use_deterministic_algorithms (slow; for bitwise tests such as scripts/test_resume.sh)')
     parser.add_argument('--save-every-minutes', type=float, default=0,
@@ -550,7 +552,9 @@ def main():
         'x330': {'d_model': 1024, 'n_layers': 24, 'n_heads': 16, 'd_ff': 4096},  # ~327M
     }
 
-    model_config = model_configs[args.model_size]
+    model_config = dict(model_configs[args.model_size])
+    if args.n_layers:
+        model_config['n_layers'] = args.n_layers
 
     print("Configuration:")
     print(f"  Model size: {args.model_size}")
@@ -627,6 +631,7 @@ def main():
         settle_clamp=args.settle_clamp,
         settle_controller=args.settle_controller,
         settle_repeats=args.settle_repeats,
+        settle_zero_init=args.settle_zero_init,
         heartbeat_strength=args.heartbeat_strength,
         heartbeat_target=args.heartbeat_target,
     )

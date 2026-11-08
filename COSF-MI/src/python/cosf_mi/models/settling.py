@@ -31,7 +31,7 @@ PHI = (1 + 5 ** 0.5) / 2
 
 class SettlingModule(nn.Module):
     def __init__(self, d_model, n_layers, n_osc=None, rank=64, T=8, K=1.0, gamma=0.25, beta=0.5, clamp="none", v_max=0.25,
-                 mode="settle", repeats=1):
+                 mode="settle", repeats=1, zero_init=False):
         super().__init__()
         n = n_osc or d_model
         self.n, self.T, self.gamma, self.beta, self.mode, self.repeats = n, T, gamma, beta, mode, repeats
@@ -45,6 +45,8 @@ class SettlingModule(nn.Module):
         self.s = nn.Parameter(torch.ones(rank))
         self.w_out = nn.Linear(2 * n, d_model)
         nn.init.normal_(self.w_out.weight, 0.0, 0.02 / math.sqrt(2 * n_layers))  # GPT residual rule: starts near a no-op
+        if zero_init:  # settling retest (2026-11-08, plans/settling_retest.md): W_out = 0, so the module starts as an exact no-op
+            nn.init.zeros_(self.w_out.weight)
         nn.init.zeros_(self.w_out.bias)
         self.register_buffer("K", torch.tensor(float(K)))
         self.last_phi0 = None

@@ -179,6 +179,7 @@ class COSFOscillatorConfig:
     settle_clamp: str = 'none'        # 'none' | 'phi' | 'two'
     settle_controller: str = 'none'   # 'none' | 'auto' (criticality controller adjusts K)
     settle_repeats: int = 1
+    settle_zero_init: bool = False   # W_out = 0: the settling/repeat module starts as an exact no-op (2026-11-08)
     ffn_activation: str = 'tanh'
     linear_init: str = 'default'
     heartbeat_strength: float = 0.01  # coupling_strength for the sync loss
@@ -1165,7 +1166,8 @@ class COSFOscillatorBlock(nn.Module):
         if getattr(config, 'settle_mode', 'none') != 'none':
             from cosf_mi.models.settling import SettlingModule
             self.settle = SettlingModule(config.d_model, config.n_layers, T=config.settle_T, K=config.settle_K,
-                                         clamp=config.settle_clamp, mode=config.settle_mode, repeats=config.settle_repeats)
+                                         clamp=config.settle_clamp, mode=config.settle_mode, repeats=config.settle_repeats,
+                                         zero_init=getattr(config, 'settle_zero_init', False))
 
         if getattr(config, 'projection', 'oscillator') == 'linear':  # vanilla baseline
             self.ff1 = nn.Linear(config.d_model, config.d_ff)
@@ -1274,6 +1276,11 @@ class COSFOscillatorTransformer(nn.Module):
         if getattr(config, 'linear_init', 'default') == 'gpt':
             for block in self.blocks:
                 for name, mod in block.named_modules():
+                    if name.startswith('settle') and getattr(config, 'settle_zero_init', False):
+                        # Settling retest (2026-11-08): keep the settling module's own init (W_in std 1/sqrt(d) -> unit-scale
+                        # phases, W_out = 0 -> exact no-op). Without zero-init (the 11-04 runs) this loop re-initialized
+                        # W_in and W_out at std 0.02; that path is unchanged.
+                        continue
                     resid = name in ('attn.out_oscillator', 'ff2')
                     if isinstance(mod, nn.Linear):
                         nn.init.normal_(mod.weight, 0.0, 0.02 / (math.sqrt(2 * config.n_layers) if resid else 1.0))
