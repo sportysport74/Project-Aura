@@ -1,4 +1,4 @@
-# Plan: Aura v3 base (~330M, context 1024, ~15B tokens) + one mixed fine-tune (written 2026-11-07; steps 1-2 APPROVED, step 3 not)
+# Plan: Aura v3 base (~330M, context 1024, ~15B tokens) + one mixed fine-tune (written 2026-11-07; steps 1-2 APPROVED and DONE; step 3 changes recorded 2026-11-09, not frozen)
 
 Nothing in this plan has run except a 60-step throughput probe (below). Every number marked *estimate* comes from that probe.
 
@@ -126,6 +126,55 @@ val on the whole v1 val split at 1024 tokens. Rule 1: continue only if x330 < l1
 val loss among 2e-4 / 3e-4 / 4.5e-4 / 6e-4 (seed 1); if it's 2e-4, also run 1.3e-4; if 6e-4, also 9e-4; then the lowest of all is chosen.
 Gradient accumulation was checked: float64 gradients equal the full batch to 1e-15 (`tests/test_grad_accum_multicorpus.py`); in training
 runs the losses differ by ~1e-3 after 10 steps because dropout (0.1) draws different masks per micro-batch.
+
+## Step 3 changes (Jon, 2026-11-09), recorded before step 3 is frozen
+
+Steps 1-2 results: `experiments/results/v3_checks/report.md` (scaling PASS on both seeds; lr: 6e-4 3.1301 best, 4.5e-4 3.1570, 9e-4 3.7107
+with a stall at steps ~600-1,000).
+
+**1. lr = 4.5e-4, not 6e-4 (a deliberate deviation from rule 2, which picks the lowest val loss).** Reason: rule 2 measured 200M-token
+cosine runs; step 3 holds the peak lr for ~13.5B tokens (~45× longer). 6e-4 sits one grid step (1.5×) below a run that stalled, while 4.5e-4
+cost only +0.027 at 200M, and the best lr usually falls as the horizon grows. Warmup stays 2,000 steps.
+
+**2. Loss-spike guard** (new code; built and smoke-tested before launch, including a forced spike).
+
+*Definitions.* The trainer adds every step's task loss to a GPU accumulator and reads it every 10 steps (the existing sync point, so no new
+GPU syncs). signal(s) = mean loss over the last 100 steps; baseline(s) = mean over the 2,000 steps before those; excess = signal − baseline.
+The guard is armed from step 4,000 (warmup 2,000 + one full baseline). NaN/inf loss at any step counts as a trigger.
+
+*Rule.* **Trigger** when excess > **m = 0.10**. Spike onset = the first step of the episode where excess > m/2. **Recovery** = excess back
+under m/2 within **N = 500 steps** of the trigger, which logs the event and alerts. **No recovery → rollback:** load the newest full-state
+checkpoint saved before onset − 100 (the guard keeps `latest.pt` and `latest.prev.pt`), skip the data from that checkpoint up to the trigger
+step (the loader and the step counter both move to the trigger step without updating weights, so the lr schedule stays aligned with the data
+and the WSD decay is unchanged; the skipped tokens are never trained on), log the window in CRASHES.md and alert. **Second rollback, or no
+checkpoint from before onset: stop** (`run_control/FAILED`, alert) and wait for Jon. Rollbacks don't count against the 4 auto-resumes.
+
+*Why these numbers (from the existing logs, `experiments/spike_stats.py`):*
+- **No real spike in 10B tokens of l100 at 6e-4** (v2base A + main + branch5b, ~610k steps, one single-step reading per 200 steps): the
+  excess over 5 readings vs the previous 50 has sd 0.064-0.082 and a maximum of 3.5 sd over ~2,600 windows, so it's Gaussian-like noise
+  with no event. The biggest single readings above the trailing mean (+0.45) are 3.2 single-step sd, also noise.
+- **x330 single-step loss sd ≈ 0.104** (v3 checks, 65,536 tokens/step). A 100-step mean then has sd ≈ 0.010 and the 2,000-step baseline
+  ≈ 0.002, so **m = 0.10 is ~9 sd**: noise alone should never trigger it across ~23k checks (229k steps), and m/2 = 0.05 (~4.5 sd) is a clear
+  onset/recovery line.
+- **The one real instability in our logs** (x330 at 9e-4): single-step loss jumped from 5.07 to 5.74 (+0.67) at step 600 and stayed
+  ~0.3-0.5 above the 4.5e-4 run through step ~1,000, a spike of several times m that lasted ~400-500 steps. N = 500 lets a self-correcting
+  spike like that recover without a rollback, while a run that stays up longer gets rolled back. At ~1.07 s/step, 500 steps ≈ 9 min.
+- **Caveat:** the logs have no per-step x330 losses over a long run, so the 0.010 noise figure is derived (√100 scaling), not measured.
+  **Calibration rule (pre-registered):** the wall-power soak runs x330 with the guard in log-only mode; if its measured 100-step excess sd
+  is above 0.0125 (so m would be < 8 sd), m becomes 8 × that sd and m/2 follows. Recorded here before step 3 launches.
+- The guard is off during warm-up, so a warm-up stall like 9e-4's would not be caught; at 4.5e-4 with a 2,000-step warmup that risk is low,
+  and the watchdog still covers hangs.
+
+**3. Step 3 waits for, in order:** the platform upgrade (9950X3D / 64 GB / X870E; during it: 12V-2x6 cable seating, GPU at x16), a full
+memtest pass, `.wslconfig` and the C: pagefile updated, the **450 W cap re-set**, **HWiNFO logging on** (rails + GPU), then a **short soak on
+wall power** (surge strip, not the UPS: x330 at 450 W, ~2 h, guard in log-only mode for the calibration above). Then Jon sees the final plan
+and step 3 is frozen and launched.
+
+**4. Data:** ext2 (`data/corpus_v3/tok24k_ext2`) built 2026-11-09 by `scripts/corpus/build_ext2.sh` (download + arithmetic + tokenize, CPU only).
+The arithmetic uses seed 3 and excludes every non-fact problem in `arith_corpus_v1/v2` (new `--exclude-jsonl` flag; 0 overlap checked on a
+50k sample). **Side effect:** cells with a small problem space are mostly used up already (e.g. − 3x2 1.11% → 0.01%, × 2x3 1.05% → 0.13% of
+ext2's arithmetic), so ext2's arithmetic leans to 1-digit facts and 4-digit cells. It's 3.5% of ext2 (~1.2% of the 15B), and v1/v2 still
+cover every cell in the shared permutation, so the overall mix shifts only slightly.
 
 ## Risks / open points
 - At 61k tok/s the pretrain is ~3 days of GPU; the two GPU faults (nvlddmkm 153) happened under exactly this kind of sustained load. Telemetry

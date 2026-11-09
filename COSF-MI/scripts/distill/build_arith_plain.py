@@ -80,10 +80,20 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--exclude-facts", action="store_true", help="also hold out the eval's 1-digit facts (strict rule)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--exclude-jsonl", nargs="*", default=[],
+                   help="earlier arithmetic jsonl files (meta 'op|a|b'): their non-fact problems are never generated again (v3, 2026-11-09)")
     args = p.parse_args()
     mix = {k: float(v) for k, v in (x.split(":") for x in args.mix.split(","))}
     rng = random.Random(args.seed)
     exclude = excluded_triples()
+    n_prev = 0
+    for path in args.exclude_jsonl:  # problems already in earlier corpora (facts stay allowed, as in every earlier corpus)
+        for line in open(path):
+            op, a, b = json.loads(line)["meta"].split("|")
+            exclude.add((op, int(a), int(b)))
+            n_prev += 1
+    if args.exclude_jsonl:
+        print(f"excluding {n_prev:,} earlier problems from {len(args.exclude_jsonl)} files", flush=True)
     seen, val, train = set(), [], []
     skipped = Counter()
 
@@ -124,7 +134,7 @@ def main():
               "train": len(train), "val": len(val), "unique_train": len(set(train)),
               "facts_in_train": sum(is_fact(*t) for t in train), "exclude_facts": args.exclude_facts,
               "ops": dict(Counter(t[0] for t in train)), "cells": dict(sorted(Counter(cell(*t) for t in train).items())),
-              "skipped": dict(skipped), "seed": args.seed}
+              "skipped": dict(skipped), "seed": args.seed, "exclude_jsonl": args.exclude_jsonl}
     (out / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     print(json.dumps({k: v for k, v in report.items() if k != "cells"}, ensure_ascii=False))
 
