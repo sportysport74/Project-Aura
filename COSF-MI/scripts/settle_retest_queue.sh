@@ -17,7 +17,8 @@ note() { [ "$SMOKE" = 1 ] || bash scripts/notify.sh "$1" 3; echo "=== $(date -Is
 cap=$(nvidia-smi --query-gpu=power.limit --format=csv,noheader,nounits | head -1)
 [ "${cap%.*}" = 450 ] || fail "power limit ${cap} W, not 450 W"
 [ -f "$DATA/meta.json" ] || fail "no $DATA (build: scripts/corpus/build_arith_stream.py)"
-[ "$SMOKE" = 1 ] || echo "bash scripts/settle_retest_queue.sh" > run_control/LAST_QUEUE
+STEP=${STEP:-1}
+[ "$SMOKE" = 1 ] || echo "STEP=$STEP bash scripts/settle_retest_queue.sh" > run_control/LAST_QUEUE
 mkdir -p "$CK" "$RES"
 # epochs needed for STEPS at 32 × 512 tokens per step (the stream repeats as epochs if it's shorter than 200M tokens)
 EPOCHS=$($PY -c "import json,math;m=json.load(open('$DATA/meta.json'));print(max(1,math.ceil($STEPS*32*512/m['train_tokens'])))")
@@ -41,6 +42,24 @@ if [ "$SMOKE" = 1 ]; then   # arms B, C, D: build, no-op check at init, 20 steps
   run B_s1 1 --settle settle --settle-T 8 --settle-K 1.0 --settle-zero-init
   run C_s1 1 --settle repeat --settle-repeats 3 --settle-zero-init
   run D_s1 1 --n-layers 12
+fi
+if [ "$STEP" = 2 ] && [ "$SMOKE" != 1 ]; then   # step 2 (Jon approved 2026-11-08 after Addendum 1): N = 8, L_D = 27
+  $PY -c "import json,sys;sys.exit(0 if json.load(open('$RES/primary_cells.json'))['enough'] else 1)" || fail "fewer than 3 primary cells"
+  for n in A_s1 A_s2; do [ -f "$RES/$n.jsonl" ] || fail "step-1 eval $RES/$n.jsonl missing"; done
+  run A_s3 3
+  for s in 1 2 3; do run B_s$s $s --settle settle --settle-T 8 --settle-K 1.0 --settle-zero-init; done
+  for s in 1 2 3; do run C_s$s $s --settle repeat --settle-repeats 8 --settle-zero-init; done
+  for s in 1 2 3; do run D_s$s $s --n-layers 27; done
+  ev=()
+  for n in A_s3 B_s1 B_s2 B_s3 C_s1 C_s2 C_s3 D_s1 D_s2 D_s3; do [ -f "$RES/$n.jsonl" ] || ev+=("$n=$CK/$n/final_model.pt"); done
+  if [ ${#ev[@]} -gt 0 ]; then
+    $PY experiments/settle_arith_eval.py eval --out "$RES" "${ev[@]}" >> "$RES/eval_step2.log" 2>&1 || fail "eval failed ($RES/eval_step2.log)"
+  fi
+  $PY experiments/settle_arith_eval.py verdict --out "$RES" --ckpt-dir "$CK" > "$RES/verdict.log" 2>&1 || fail "verdict failed ($RES/verdict.log)"
+  v=$($PY -c "import json;print(json.load(open('$RES/verdict.json'))['verdict'])")
+  note "settling retest step 2 DONE: verdict $v. See $RES/verdict.md"
+  echo "=== $(date -Iseconds) SETTLE_STEP2_DONE"
+  exit 0
 fi
 run A_s1 1
 run A_s2 2

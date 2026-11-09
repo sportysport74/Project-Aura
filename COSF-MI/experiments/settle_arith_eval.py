@@ -165,6 +165,91 @@ def cmd_floor(args):
     return len(primary) >= 3
 
 
+def _two_level(diff, rng, n_boot):
+    """diff: (seeds, problems) paired per-problem differences. Resample seeds, then problems within each drawn seed."""
+    S, P = diff.shape
+    si = rng.integers(0, S, size=(n_boot, S))
+    pi = rng.integers(0, P, size=(n_boot, S, P))
+    return diff[si[:, :, None], pi].mean(axis=(1, 2))
+
+
+def cmd_verdict(args):
+    """Step-2 verdict, rules frozen in experiments/plans/settling_retest.md (Decision rules)."""
+    import numpy as np
+    out = ROOT / args.out
+    prim = json.loads((out / "primary_cells.json").read_text())["primary"]
+    order = [p["cell"] for p in prim]  # easiest first
+    k = len(order) // 2
+    easier, harder = set(order[:k]), set(order[k:])
+    seeds = [1, 2, 3]
+    arms = ["A", "B", "C", "D"]
+    ref = None
+    ok, rows_by = {}, {}
+    for a in arms:
+        for s in seeds:
+            rows = [json.loads(line) for line in open(out / f"{a}_s{s}.jsonl")]
+            key = [(r["cell"], r["a"], r["b"]) for r in rows]
+            if ref is None:
+                ref = key
+            assert key == ref, f"{a}_s{s}: test-set order differs (pairing broken)"
+            ok[a, s] = np.array([r["ok"] for r in rows], dtype=np.float64)
+            rows_by[a, s] = rows
+    cell = np.array([c for c, _, _ in ref])
+    pm = np.isin(cell, order)
+    em, hm = np.isin(cell, list(easier)), np.isin(cell, list(harder))
+    M = {a: np.stack([ok[a, s] for s in seeds]) for a in arms}  # (3, n_test)
+    acc = {a: M[a][:, pm].mean() for a in arms}
+    rng = np.random.default_rng(20261108)
+    L = ["# Settling retest, step 2: verdict\n",
+         f"Primary cells: {', '.join(order)} ({int(pm.sum())} problems × 3 seeds per arm). Two-level bootstrap, {args.n_boot:,} resamples, "
+         "seeds then problems within seed, paired across arms. Rules frozen in `experiments/plans/settling_retest.md`.\n",
+         "| arm | seed 1 | seed 2 | seed 3 | pooled |", "|---|---|---|---|---|"]
+    names = {"A": "A vanilla2 L8", "B": "B settling T=8", "C": "C repeat ×8", "D": "D vanilla2 L27"}
+    for a in arms:
+        L.append(f"| {names[a]} | " + " | ".join(f"{M[a][i, pm].mean():.1%}" for i in range(3)) + f" | {acc[a]:.1%} |")
+    L += ["", "| contrast | diff | 95% CI | CI > 0 | B wins seeds | pass |", "|---|---|---|---|---|---|"]
+    passes = []
+    for c in ["A", "C", "D"]:
+        d = (M["B"] - M[c])[:, pm]
+        bs = _two_level(d, rng, args.n_boot)
+        lo, hi = np.percentile(bs, [2.5, 97.5])
+        wins = [bool(M["B"][i, pm].mean() > M[c][i, pm].mean()) for i in range(3)]
+        p = lo > 0 and all(wins)
+        passes.append(p)
+        L.append(f"| B − {c} | {d.mean():+.1%} | [{lo:+.1%}, {hi:+.1%}] | {'yes' if lo > 0 else 'no'} | {sum(wins)}/3 | {'yes' if p else 'no'} |")
+    verdict = "PASS" if all(passes) else "FAIL"
+    L.append(f"\n**Verdict: {verdict}** (pass needs all three contrasts: CI above 0 and B ahead on every seed).")
+    best = max(["A", "C", "D"], key=lambda a: acc[a])
+    dh = (M["B"] - M[best])[:, hm]
+    de = (M["B"] - M[best])[:, em]
+    bh, be = _two_level(dh, rng, args.n_boot), _two_level(de, rng, args.n_boot)
+    tr = bh - be
+    lo, hi = np.percentile(tr, [2.5, 97.5])
+    L.append(f"\nDifficulty trend (secondary): best control = {best}; (B − {best}) harder half {dh.mean():+.1%}, easier half {de.mean():+.1%}, "
+             f"trend {dh.mean() - de.mean():+.1%} [{lo:+.1%}, {hi:+.1%}] → {'gap grows with difficulty' if lo > 0 else 'no trend shown'}.")
+    # all cells, per arm (mean over seeds)
+    cells = list(dict.fromkeys(cell.tolist()))
+    L += ["\n## All cells (mean over 3 seeds)\n", "| cell | n | A | B | C | D | class |", "|---|---|---|---|---|---|---|"]
+    for c in cells:
+        m = cell == c
+        cls = "primary" if c in order else ("+/−" if c[0] in "+-" else "other")
+        L.append(f"| {c} | {int(m.sum())} | " + " | ".join(f"{M[a][:, m].mean():.1%}" for a in arms) + f" | {cls} |")
+    # val loss + W_out movement from the checkpoints
+    import torch
+    L += ["\n## Val loss and settling weights\n", "| run | val loss | ‖w_out‖ per layer (mean) |", "|---|---|---|"]
+    for a in arms:
+        for s in seeds:
+            ck = torch.load(ROOT / args.ckpt_dir / f"{a}_s{s}" / "final_model.pt", map_location="cpu", weights_only=False)
+            wo = [v.float().norm().item() for kk, v in ck["model_state_dict"].items() if kk.endswith("settle.w_out.weight")]
+            L.append(f"| {a}_s{s} | {ck.get('val_loss', float('nan')):.4f} | {sum(wo) / len(wo):.3f} ({len(wo)} layers) |" if wo
+                     else f"| {a}_s{s} | {ck.get('val_loss', float('nan')):.4f} | — |")
+    (out / "verdict.md").write_text("\n".join(L) + "\n")
+    (out / "verdict.json").write_text(json.dumps({"verdict": verdict, "acc": acc, "passes": dict(zip("ACD", passes)), "best_control": best},
+                                                 indent=1))
+    print("\n".join(L))
+    return verdict
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -179,11 +264,17 @@ def main():
     a = sub.add_parser("floor")
     a.add_argument("--out", required=True)
     a.add_argument("names", nargs="+")
+    a = sub.add_parser("verdict")
+    a.add_argument("--out", required=True)
+    a.add_argument("--ckpt-dir", default="checkpoints/settle_retest")
+    a.add_argument("--n-boot", type=int, default=10000)
     args = p.parse_args()
     if args.cmd == "testset":
         cmd_testset(args)
     elif args.cmd == "eval":
         cmd_eval(args)
+    elif args.cmd == "verdict":
+        cmd_verdict(args)
     else:
         sys.exit(0 if cmd_floor(args) else 3)
 
