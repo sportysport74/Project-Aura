@@ -9,6 +9,9 @@ mark_failed() {
 # Shared by the queue scripts (source it). run_train LOG ARGS...: runs train_overnight.py, appending to LOG.
 #   exit 0  -> returns
 #   exit 75 -> paused on request (scripts/pause_train.sh): the whole queue exits 0 here, so it doesn't move on to the next stage
+#   exit 76 -> spike-guard rollback (train_overnight.py --spike-guard): relaunched at once with the same arguments (the trainer finds
+#              guard_pending.json and loads the pre-spike checkpoint); the rollback is already in CRASHES.md and alerted
+#   exit 77 -> spike-guard STOP (second spike, or no pre-spike checkpoint): STOPPED, queue exits 1, waits for Jon
 #   other   -> STOPPED (a CUDA error is labelled), queue exits 1. Never retries.
 # The queue must set PY and write its own relaunch command to run_control/LAST_QUEUE (scripts/resume_train.sh reads it).
 # Stall watchdog: if the log hasn't changed for STALL_SEC (default 900 s) while the trainer is alive, it's hung (2026-10-31: after a
@@ -16,11 +19,13 @@ mark_failed() {
 # killed and the queue STOPs (exit 1), never retried. tqdm writes to the log every step, so a live run touches it constantly.
 run_train() {
   local log=$1; shift
-  local rc=0
+  local rc=0 relaunches=0
+  while :; do
+  rc=0
   $PY -u "${TRAIN_SCRIPT:-train_overnight.py}" "$@" >> "$log" 2>&1 &   # TRAIN_SCRIPT=finetune_chat.py for fine-tunes
   local pid=$!
   # GPU telemetry next to the log, every 30 s while the trainer runs (2026-11-01: stage 2 had none when it faulted)
-  ( echo "time,mib,util,temp,watts,sm_mhz,mem_mhz,pcie_gen,pcie_width,event_reasons" > "$log.gpu.csv"
+  ( [ -f "$log.gpu.csv" ] || echo "time,mib,util,temp,watts,sm_mhz,mem_mhz,pcie_gen,pcie_width,event_reasons" > "$log.gpu.csv"
     while kill -0 "$pid" 2>/dev/null; do
       nvidia-smi --query-gpu=memory.used,utilization.gpu,temperature.gpu,power.draw,clocks.sm,clocks.mem,pcie.link.gen.current,pcie.link.width.current,clocks_event_reasons.active \
         --format=csv,noheader,nounits 2>/dev/null | sed "s/^/$(date +%F_%T),/" >> "$log.gpu.csv"; sleep 30
@@ -36,7 +41,15 @@ run_train() {
     fi
   done
   wait "$pid" || rc=$?
-  if [ "$rc" = 75 ]; then
+  if [ "$rc" = 76 ] && [ "$relaunches" -lt 3 ]; then
+    relaunches=$((relaunches + 1))
+    echo "=== $(date -Iseconds) SPIKE GUARD ROLLBACK: relaunching the trainer ($relaunches) from the pre-spike checkpoint"
+    continue
+  elif [ "$rc" = 77 ]; then
+    echo "=== $(date -Iseconds) STOPPED by the spike guard (see CRASHES.md in the checkpoint dir); waiting for Jon"
+    mark_failed "spike guard STOP: $(grep -a 'STOP:' "$log" | tail -1 | cut -c1-160) (log $log)"
+    exit 1
+  elif [ "$rc" = 75 ]; then
     echo "=== $(date -Iseconds) PAUSED on request: $(grep -o 'PAUSED at step [0-9]*' "$log" | tail -1). Resume: bash scripts/resume_train.sh"
     exit 0
   elif [ "$rc" != 0 ]; then
@@ -50,4 +63,6 @@ run_train() {
     tail -n 20 "$log"
     exit 1
   fi
+  return 0
+  done
 }

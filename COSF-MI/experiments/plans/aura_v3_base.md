@@ -165,12 +165,44 @@ checkpoint from before onset: stop** (`run_control/FAILED`, alert) and wait for 
 - The guard is off during warm-up, so a warm-up stall like 9e-4's would not be caught; at 4.5e-4 with a 2,000-step warmup that risk is low,
   and the watchdog still covers hangs.
 
+*Built and smoke-tested 2026-11-09* (`spike_guard.py`, `train_overnight.py --spike-guard --guard-*`, `scripts/lib_train.sh`: exit 76 =
+rollback → relaunch with the same arguments, exit 77 = guard STOP → FAILED + alert). Every event goes to `<checkpoint_dir>/CRASHES.md`
+(onset, trigger, recovery, rollback with the skipped step range, stop) and to ntfy. The guard's history is saved in every full-state
+checkpoint, so it stays armed across resumes. "Second spike" = a second spike that needs a rollback; spikes that recover are logged and
+alerted but don't count. Tests: `tests/test_spike_guard.py` (8 unit tests on synthetic streams, incl. inf) and
+`scripts/smoke_spike_guard.sh` + `tests/test_spike_guard_smoke.py` (5 end-to-end runs, s25 / arithmetic, window 50, baseline 200, N 100,
+m 0.5), all passing:
+- T1 spike that recovers within N → trigger + RECOVERED, no rollback, run finishes.
+- T2 spike that doesn't recover → one rollback to `latest.prev.pt` (step 400; onset 520), data of steps 400-530 skipped, training resumes at
+  step 540 (the first check after the trigger), no step in 400-530 re-trained, the save inside the episode held, alerts sent, run finishes.
+- T3 a second non-recovering spike → exit 77, STOP, FAILED marker, no final model.
+- T4 a real NaN step at 250 (before arming) → rollback at the same check (step 250), finite losses afterwards.
+- T5 a real weight spike (noise) after step 491, with a save at 495 landing between two checks (spiked weights, fingerprint 1.978e6):
+  saves at 540 and 585 held during the episode; the rollback skipped the 495 save and loaded the 450 save, whose weight fingerprint
+  (3.9656026334e5) matches the 450 save exactly; loss back to the pre-spike level after the rollback.
+- Guard off: `scripts/test_resume.sh` still bit-identical (eager) after the trainer change; existing unit tests pass.
+- Note: with hourly saves (~3,400 steps) and a 100-step window, the rollback point is at most ~2 h of training old (`latest.prev.pt`
+  when `latest.pt` is too close to the onset).
+
 **3. Step 3 waits for, in order:** the platform upgrade (9950X3D / 64 GB / X870E; during it: 12V-2x6 cable seating, GPU at x16), a full
 memtest pass, `.wslconfig` and the C: pagefile updated, the **450 W cap re-set**, **HWiNFO logging on** (rails + GPU), then a **short soak on
 wall power** (surge strip, not the UPS: x330 at 450 W, ~2 h, guard in log-only mode for the calibration above). Then Jon sees the final plan
 and step 3 is frozen and launched.
 
-**4. Data:** ext2 (`data/corpus_v3/tok24k_ext2`) built 2026-11-09 by `scripts/corpus/build_ext2.sh` (download + arithmetic + tokenize, CPU only).
+**5. Equal-compute checkpoint (Jon, 2026-11-09; report only, no gate).** Question: at the GPU time the finished l100 10B base cost, is x330
+already better? **l100 10B = 15.73 GPU-h** of training (sum of logged step times: v2base A 3.76 h for 2.2B + main 11.97 h for 7.8B, at
+~180k tok/s; the 5B branch and evals not counted). At x330's measured 59.6-64.1k tok/s that is **≈ 3.45B tokens = 52,640 steps**.
+- To compare like with like (l100 10B was decayed over its last 10%), x330 gets a decay branch too: full-state snapshot at **step 47,376**
+  (`--save-at-steps`), then a branch decaying linearly to 0 over the next **5,264 steps** (10%) → the equal-compute point at step 52,640.
+  The main run continues from the snapshot as before. The branch costs ~1.6 GPU-h extra (not part of the equal-compute budget).
+- The x330 GPU-h actually spent up to step 52,640 is measured from the logs and reported next to the 15.73 h. If it differs by more than 10%,
+  that's stated; the step isn't moved.
+- **Compared with `checkpoints/v2base/main` (l100 10B):** (1) val loss on the v1 val split at **seq 512 for both** (the 1024-context numbers
+  aren't comparable with l100's 512); (2) the knowledge PMI probe (l100 10B: 0.448); (3) chat factuality after the same ft_v2 recipe and
+  seeds as `v2base/ft/b10_s*` (100 questions, the same protocol; b10_s1: 0.310 joined / 0.327 pieces). Differences with bootstrap CIs where
+  the eval has items (probe, factuality); val loss as is. Not a gate: the 15B run continues whatever it shows.
+
+**4. Data:** ext2 (`data/corpus_v3/tok24k_ext2`) built 2026-11-09 06:17 by `scripts/corpus/build_ext2.sh` (download + arithmetic + tokenize, CPU only): **5.004B train tokens** (FineWeb-Edu 2.794B, Cosmopedia v2 1.524B, FineMath-4+ 0.508B, arithmetic 0.178B), so v1 + ext + ext2 = 2.20 + 7.80 + 5.00 = **15.0B**. Raw shards: 16 files, 17.4 GB, `data/corpus_v3/raw/SHA256SUMS`.
 The arithmetic uses seed 3 and excludes every non-fact problem in `arith_corpus_v1/v2` (new `--exclude-jsonl` flag; 0 overlap checked on a
 50k sample). **Side effect:** cells with a small problem space are mostly used up already (e.g. − 3x2 1.11% → 0.01%, × 2x3 1.05% → 0.13% of
 ext2's arithmetic), so ext2's arithmetic leans to 1-digit facts and 4-digit cells. It's 3.5% of ext2 (~1.2% of the 15B), and v1/v2 still

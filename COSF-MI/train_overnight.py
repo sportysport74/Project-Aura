@@ -41,9 +41,44 @@ from cosf_mi.data.tokenizer import BPETokenizer
 from cosf_mi.data.token_dataset_fast import create_datasets_fast
 from cosf_mi.data.memmap_dataset import load_corpus
 from cosf_mi.training.sleep_cycle import SleepCycleHook
+from spike_guard import SpikeGuard, ROLLBACK_EXIT, STOP_EXIT, CHECK_EVERY
 
 PAUSE_FLAG = Path(__file__).parent / "run_control" / "PAUSE"  # created by scripts/pause_train.sh
 PAUSE_EXIT = 75  # exit code for "paused on request" (EX_TEMPFAIL); queues treat it as a clean stop
+
+
+# --guard-inject (spike-guard smoke tests only): comma-separated specs, each applied only before the first rollback unless it ends in ":always"
+#   obs:START:DUR:MAG  add MAG to the loss the guard sees for steps [START, START+DUR) (training itself is untouched)
+#   nan:STEP           make step STEP's loss and gradients NaN (a real non-finite step: the weights become NaN)
+#   weights:STEP:SCALE add Gaussian noise (SCALE x each matrix's std) to every weight matrix after step STEP (a real spike)
+def _parse_inject(spec):
+    out = []
+    for item in filter(None, (spec or "").split(",")):
+        f = item.split(":")
+        always = f[-1] == "always"
+        f = f[:-1] if always else f
+        kind, start = f[0], int(f[1])
+        dur = int(f[2]) if kind == "obs" else 1
+        mag = float(f[3]) if kind == "obs" else (float(f[2]) if kind == "weights" else 0.0)
+        out.append({"kind": kind, "start": start, "dur": dur, "mag": mag, "always": always})
+    return out
+
+
+def _inject_on(spec, kind, step, guard):
+    return [x for x in spec if x["kind"] == kind and x["start"] <= step < x["start"] + x["dur"]
+            and (x["always"] or guard is None or guard.state["rollbacks"] == 0)]
+
+
+def _inject_active(spec, kind, step, guard):
+    return bool(_inject_on(spec, kind, step, guard))
+
+
+def _inject_mag(spec, kind, step):
+    return sum(x["mag"] for x in spec if x["kind"] == kind and x["start"] <= step < x["start"] + x["dur"])
+
+
+def _inject_obs(spec, step, guard):
+    return sum(x["mag"] for x in _inject_on(spec, "obs", step, guard))
 
 
 def train_with_gentle_sleep(
@@ -71,6 +106,8 @@ def train_with_gentle_sleep(
     save_every_minutes=0.0,
     save_at_steps=(),
     grad_accum=1,
+    guard=None,
+    inject=(),
 ):
     """Train model with gentle sleep cycles.
 
@@ -88,6 +125,35 @@ def train_with_gentle_sleep(
     current_epoch = 0
     dataset, batch_size = train_loader.dataset, train_loader.batch_size
     window_start, window_tokens = time.time(), 0
+    loss_acc, acc_n = None, 0  # spike guard: task loss summed on the GPU, read every CHECK_EVERY steps
+
+    def fingerprint():  # cheap weight identity for the logs (sum |w| in float64), so a rollback can be checked against a save
+        return f"{float(sum(p.detach().double().abs().sum() for p in model.parameters())):.10e}"
+
+    def guarded_save(epoch_, batch_, why):
+        """Full-state save, unless the spike guard holds saves (an episode is open) or the loss since the last check is non-finite."""
+        nonlocal loss_acc, acc_n
+        if guard is not None:
+            if loss_acc is not None and acc_n and not math.isfinite(float(loss_acc) / acc_n):
+                act = guard.update(global_step, float(loss_acc) / acc_n, (epoch_, batch_))
+                guard_act(act)
+            if not guard.save_ok():
+                print(f"[spike guard] {why} save at step {global_step} HELD (episode open since step {guard.onset[0]})", flush=True)
+                return False
+        save_latest(model, optimizer, scheduler, epoch_, batch_, global_step, best_val_loss, checkpoint_dir,
+                    guard_state=guard.state_dict() if guard is not None else None)
+        print(f"saved latest.pt at step {global_step} ({why}); weights {fingerprint()}", flush=True)
+        return True
+
+    def guard_act(act):
+        if not act:
+            return
+        kind, info = act
+        if kind == "rollback":
+            print(f"[spike guard] exiting for rollback; weights now {fingerprint()}", flush=True)
+            sys.exit(ROLLBACK_EXIT)
+        print("[spike guard] STOP", flush=True)
+        sys.exit(STOP_EXIT)
 
     for epoch in range(start_epoch, num_epochs):
         current_epoch = epoch
@@ -136,6 +202,9 @@ def train_with_gentle_sleep(
 
                 # Total loss = task loss + sync loss
                 total_loss = task_loss + sync_loss
+                if inject and _inject_active(inject, "nan", global_step + 1, guard):  # smoke test only: a real NaN step
+                    task_loss = task_loss * float("nan")
+                    total_loss = total_loss * float("nan")
 
                 # Backward
                 total_loss.backward()
@@ -149,6 +218,11 @@ def train_with_gentle_sleep(
                     ((tl + sl) / grad_accum).backward()
                     task_acc, sync_acc = task_acc + tl.detach() / grad_accum, sync_acc + sl.detach() / grad_accum
                 task_loss, sync_loss = task_acc, sync_acc
+                if inject and _inject_active(inject, "nan", global_step + 1, guard):  # smoke test only: a real NaN step
+                    task_loss = task_loss * float("nan")
+                    for p_ in model.parameters():
+                        if p_.grad is not None:
+                            p_.grad.mul_(float("nan"))
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # pre-clip norm, logged below
             optimizer.step()
             model.apply_julia_correction()  # damping moved out of forward()
@@ -163,6 +237,23 @@ def train_with_gentle_sleep(
 
             epoch_loss += task_loss.detach().double()  # summed on the GPU (float64, same as the old Python float)
             global_step += 1
+            if inject and _inject_active(inject, "weights", global_step, guard):  # smoke test only: a real spike (noise on every matrix)
+                scale = _inject_mag(inject, "weights", global_step)
+                with torch.no_grad():
+                    for p_ in model.parameters():
+                        if p_.dim() >= 2:
+                            p_.add_(torch.randn_like(p_) * p_.std() * scale)
+                print(f"[inject] weights noise x{scale} at step {global_step}; weights {fingerprint()}", flush=True)
+            if guard is not None:
+                tl = task_loss.detach().float()
+                loss_acc = tl if loss_acc is None else loss_acc + tl
+                acc_n += 1
+                if global_step % CHECK_EVERY == 0:
+                    mean10 = float(loss_acc) / acc_n
+                    if inject:
+                        mean10 += _inject_obs(inject, global_step, guard)
+                    loss_acc, acc_n = None, 0
+                    guard_act(guard.update(global_step, mean10, (epoch, batch_idx + 1)))
 
             # Plain log line (tqdm's \r output is hard to parse from a log file)
             if log_every:
@@ -186,7 +277,8 @@ def train_with_gentle_sleep(
                     torch.save({"config": model.config, "model_state_dict": model.state_dict(), "step": global_step,
                                 "val_loss": val_loss}, Path(checkpoint_dir) / "final_model.pt")
                 # full state at the stop too, so a run stopped with --max-steps can be continued or branched exactly
-                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir)
+                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir,
+                            guard_state=guard.state_dict() if guard is not None else None)
                 return
 
             # Progress bar and sleep check every 10 steps: reading the loss is a GPU sync
@@ -207,19 +299,25 @@ def train_with_gentle_sleep(
 
             if global_step % save_every == 0 or (save_every_minutes and time.time() - last_save >= 60 * save_every_minutes):
                 t_save = time.time()
-                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step,
-                            best_val_loss, checkpoint_dir)
-                last_save = time.time()
-                print(f"saved latest.pt at step {global_step} ({last_save - t_save:.1f} s)", flush=True)
+                if guard is not None:
+                    if guarded_save(epoch, batch_idx + 1, "scheduled"):
+                        last_save = time.time()
+                else:
+                    save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step,
+                                best_val_loss, checkpoint_dir)
+                    last_save = time.time()
+                    print(f"saved latest.pt at step {global_step} ({last_save - t_save:.1f} s)", flush=True)
             # Pause request (scripts/pause_train.sh): save the full state and exit with code 75; the queue stops cleanly
-            if global_step % 20 == 0 and PAUSE_FLAG.exists():
-                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir)
+            if global_step % 20 == 0 and PAUSE_FLAG.exists() and (guard is None or guard.save_ok()):
+                save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step, best_val_loss, checkpoint_dir,
+                            guard_state=guard.state_dict() if guard is not None else None)
                 print(f"PAUSED at step {global_step}: latest.pt saved in {checkpoint_dir}; resume with scripts/resume_train.sh",
                       flush=True)
                 sys.exit(PAUSE_EXIT)
-            if global_step in save_at_steps:
+            if global_step in save_at_steps and (guard is None or guard.save_ok()):
                 save_latest(model, optimizer, scheduler, epoch, batch_idx + 1, global_step,
-                            best_val_loss, checkpoint_dir, name=f"state_step{global_step}.pt")
+                            best_val_loss, checkpoint_dir, name=f"state_step{global_step}.pt",
+                            guard_state=guard.state_dict() if guard is not None else None)
                 print(f"saved state_step{global_step}.pt", flush=True)
 
         # Restore original sleep settings after first epoch
@@ -301,7 +399,7 @@ def train_with_gentle_sleep(
 
 
 def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step, best_val_loss, checkpoint_dir,
-                name="latest.pt"):
+                name="latest.pt", guard_state=None):
     """Full training state for crash recovery: weights, optimizer, scheduler, data position and RNG states.
     Written to a temp file and renamed (atomic), and the previous latest.pt is kept as latest.prev.pt, so a crash
     during a save, or a bad file, still leaves a state to resume from."""
@@ -319,6 +417,7 @@ def save_latest(model, optimizer, scheduler, epoch, batch_in_epoch, global_step,
         'rng': {'torch': torch.get_rng_state(), 'python': random.getstate(),
                 'cuda': torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
         'saved_at': time.strftime("%Y-%m-%dT%H:%M:%S"),
+        'guard': guard_state,
     }
     tmp = checkpoint_dir / f"{name}.tmp"
     torch.save(state, tmp)
@@ -487,6 +586,15 @@ def main():
     parser.add_argument('--save-final', action='store_true',
                         help='With --max-steps: save the weights to <checkpoint-dir>/final_model.pt at the stop')
     parser.add_argument('--seq-len', type=int, default=256, help='Context length (model positions and data windows)')
+    parser.add_argument('--spike-guard', action='store_true',
+                        help='loss-spike guard (spike_guard.py; plan aura_v3_base.md "Step 3 changes"): rollback + data skip, 2nd = stop')
+    parser.add_argument('--guard-margin', type=float, default=0.10)
+    parser.add_argument('--guard-window', type=int, default=100, help='signal: mean loss over this many steps')
+    parser.add_argument('--guard-baseline', type=int, default=2000, help='baseline: mean over this many steps before the window')
+    parser.add_argument('--guard-arm', type=int, default=4000, help='guard armed from this step (non-finite loss counts from step 1)')
+    parser.add_argument('--guard-recover', type=int, default=500, help='N: steps after a trigger to recover before a rollback')
+    parser.add_argument('--guard-log-only', action='store_true', help='log triggers but never roll back or stop (soak calibration)')
+    parser.add_argument('--guard-inject', type=str, default='', help='smoke tests only, see _parse_inject')
     parser.add_argument('--grad-accum', type=int, default=1,
                         help='Micro-batches per optimizer step: each step sees batch-size × grad-accum sequences (batch-size is the '
                              'micro-batch held in memory). 1 = the original code path')
@@ -719,6 +827,19 @@ def main():
     best_val_loss = float('inf')
     skip_batches = global_step = 0
     latest = Path(args.checkpoint_dir) / "latest.pt"
+    guard, pending = None, None
+    if args.spike_guard:
+        guard = SpikeGuard(args.checkpoint_dir, margin=args.guard_margin, window=args.guard_window, baseline=args.guard_baseline,
+                           arm_step=args.guard_arm, recover_steps=args.guard_recover,
+                           notify=os.environ.get("GUARD_NOTIFY", "1") != "0")
+        guard.log_only = args.guard_log_only
+        pf = Path(args.checkpoint_dir) / "guard_pending.json"
+        if pf.exists():
+            assert args.resume == 'auto', "a pending spike-guard rollback needs --resume auto"
+            pending = json.loads(pf.read_text())
+            args.resume_state = pending["checkpoint"]
+            print(f"[spike guard] pending rollback: loading {pending['checkpoint']} (step {pending['checkpoint_step']}), then skipping to "
+                  f"step {pending['target_step']} (epoch {pending['target_epoch'] + 1}, batch {pending['target_batch']})", flush=True)
     if args.resume == 'auto' and not latest.exists():
         args.resume = None
     if args.resume == 'auto' and not args.resume_state:
@@ -738,6 +859,22 @@ def main():
         scheduler.load_state_dict(state['scheduler_state_dict'])
         start_epoch, skip_batches = state['epoch'], state['batch_in_epoch']
         global_step, best_val_loss = state['global_step'], state['best_val_loss']
+        if guard is not None:
+            guard.load_state_dict(state.get('guard'))
+            fp = f"{float(sum(p.detach().double().abs().sum() for p in model.parameters())):.10e}"
+            print(f"[spike guard] loaded state at step {global_step}; weights {fp}", flush=True)
+        if pending is not None:
+            # skip the data window: data position and step counter move to the trigger step without any weight update
+            start_epoch, skip_batches, global_step = pending['target_epoch'], pending['target_batch'], pending['target_step']
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                scheduler.last_epoch = global_step - 1
+                scheduler.step()
+            done = Path(args.checkpoint_dir) / f"guard_pending.done.{time.strftime('%Y%m%d-%H%M%S')}.json"
+            os.replace(Path(args.checkpoint_dir) / "guard_pending.json", done)
+            print(f"[spike guard] rollback applied: steps {pending['checkpoint_step']}-{pending['target_step']} skipped; now at step "
+                  f"{global_step}, lr={optimizer.param_groups[0]['lr']:.2e}", flush=True)
         rng = state.get('rng')
         if rng:
             # map_location moved the saved ByteTensors to the device; the setters need them on the CPU
@@ -819,6 +956,8 @@ def main():
         save_every_minutes=args.save_every_minutes,
         save_at_steps={int(x) for x in args.save_at_steps.split(',') if x},
         grad_accum=args.grad_accum,
+        guard=guard,
+        inject=_parse_inject(args.guard_inject),
     )
 
     print()
