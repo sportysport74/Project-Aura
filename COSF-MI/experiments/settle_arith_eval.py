@@ -214,7 +214,7 @@ def cmd_verdict(args):
         bs = _two_level(d, rng, args.n_boot)
         lo, hi = np.percentile(bs, [2.5, 97.5])
         wins = [bool(M["B"][i, pm].mean() > M[c][i, pm].mean()) for i in range(3)]
-        p = lo > 0 and all(wins)
+        p = bool(lo > 0) and all(wins)
         passes.append(p)
         L.append(f"| B − {c} | {d.mean():+.1%} | [{lo:+.1%}, {hi:+.1%}] | {'yes' if lo > 0 else 'no'} | {sum(wins)}/3 | {'yes' if p else 'no'} |")
     verdict = "PASS" if all(passes) else "FAIL"
@@ -244,7 +244,7 @@ def cmd_verdict(args):
             L.append(f"| {a}_s{s} | {ck.get('val_loss', float('nan')):.4f} | {sum(wo) / len(wo):.3f} ({len(wo)} layers) |" if wo
                      else f"| {a}_s{s} | {ck.get('val_loss', float('nan')):.4f} | — |")
     (out / "verdict.md").write_text("\n".join(L) + "\n")
-    (out / "verdict.json").write_text(json.dumps({"verdict": verdict, "acc": acc, "passes": dict(zip("ACD", passes)), "best_control": best},
+    (out / "verdict.json").write_text(json.dumps({"verdict": verdict, "acc": {a: float(v) for a, v in acc.items()}, "passes": dict(zip("ACD", passes)), "best_control": best},
                                                  indent=1))
     print("\n".join(L))
     return verdict
