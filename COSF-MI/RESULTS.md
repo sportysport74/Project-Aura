@@ -4,6 +4,52 @@ Measured results only. Every entry states its evidence: seeds, baselines and con
 plans live in `experiments/VISION.md` and `experiments/plans/`; work in progress lives in the Setup status of `CLAUDE.md`. If an
 entry's design changed after the data came in, it says so here.
 
+## 2026-11-09 — Settling retest on arithmetic (pre-registered; FAIL: within-token settling is closed)
+
+- **Design** (`experiments/plans/settling_retest.md`, frozen `ee4a29d` before any run; Addendum 1 with the floor check and compute matching
+  committed `d1da601` before step 2). Jon's 11-04 retest rule: zero-init readout (W_out = 0, so the module starts as an exact no-op) and a
+  multi-step reasoning task, not val loss. s25 backbone, arithmetic only (`data/arith_settle/tok24k`, programmatic, ours), 200M tokens,
+  seeds 1-3 per arm. Arms: **A** vanilla2 L8 (23.4M); **B** + settling after every block (T = 8, K = 1, no clamp, no controller; 27.2M);
+  **C** + the same plain block repeated ×8 without dynamics (27.2M); **D** vanilla2 L27 (57.1M). C and D compute-matched to B by measured
+  tok/s (B 190.8k, C 188.4k, D 189.2k; probe noise ~±5%). **D is not parameter-matched (2.1× B).** Test: greedy exact match on held-out
+  problems; primary set = the 3 cells where A (seeds 1-2) scored 20-60% with n ≥ 50 (÷ 3x2, × 2x2, ÷ 4x1; 600 problems). Two-level
+  bootstrap (seeds, then problems within seed, paired across arms), 10,000 resamples. Pass = B − A, B − C, B − D all with CI > 0 and B ahead
+  on all 3 seeds. `experiments/results/settle_retest/verdict.md`, `floor.md`, `settle_diag.md`.
+
+| arm | seed 1 | seed 2 | seed 3 | pooled (primary) | val loss (3 seeds) |
+|---|---|---|---|---|---|
+| A vanilla2 L8 | 47.8% | 55.7% | 35.2% | 46.2% | 0.5101-0.5116 |
+| B settling T = 8 | 44.8% | 34.8% | 33.3% | 37.7% | 0.5141-0.5202 |
+| C repeat ×8 | 24.7% | 30.7% | 27.2% | 27.5% | 0.5275-0.5342 |
+| **D vanilla2 L27** | **63.5%** | **63.0%** | **62.3%** | **62.9%** | **0.4979-0.4991** |
+
+| contrast | diff | 95% CI | B wins seeds |
+|---|---|---|---|
+| B − A | −8.6% | [−20.1%, −0.7%] | 0/3 |
+| B − C | +10.2% | [+3.3%, +19.4%] | 3/3 |
+| B − D | −25.3% | [−30.6%, −18.8%] | 0/3 |
+
+- **Verdict: FAIL** (Jon accepted it as written, 2026-11-09). B beats only C, and C, the weight-tied repeat, is the worst arm, below A even on
+  easy cells (× 1x3 52.7% vs 82.3%), as in the 11-04 R4 control. **B is worse than A, which has a quarter of its compute**, on every seed
+  and in val loss. B's biggest losses are long operands against a 1-digit one (÷ 4x1 16.7% vs 36.8%, × 4x1 42.8% vs 71.0%, × 1x4 46.0% vs
+  71.5%); on multi-digit × cells it roughly ties A. Difficulty trend (secondary, vs D): −4.7% [−15.3%, +6.1%], none shown.
+- **The module was used, not ignored:** ‖w_out‖ grew from exactly 0 to ~10 per layer (B), ~12 (C).
+- **Depth helps at matched compute (D beats every arm on every primary cell and seed), but parameters are confounded:** D has 2.1× B's
+  parameters, so this doesn't separate depth from size.
+- **Settling diagnostics** (`settle_diag.md`; all 89k val tokens, end of training, the 3 B seeds agree): low, partial synchrony throughout,
+  R 0.16-0.31 at φ⁰ and 0.14-0.28 after 8 steps; settling *lowers* R in layers 2-7 and halves var(R) across tokens. λ_T runs from
+  −0.06 (layer 0, contracting) to about 0 in the middle layers and +0.03 in layer 7 (weakly diverging); phases move 0.3-0.66 rad on average.
+  So no runaway and no collapse to R → 1: the dynamics were mild, near-neutral in the deep layers, and still didn't help.
+- **Verdict code check:** a synthetic B boosted by +12 points returned PASS (+11.7%, CI [+9.9, +13.6]); the identical-inputs null (every arm
+  given A's outputs) returned FAIL with every diff 0 and 0/3 seed wins. The null test was run 2026-11-09 after the real verdict (it had been
+  skipped before the launch). The queue's own verdict step crashed on a JSON-serialization bug after writing `verdict.md`; fixed and rerun,
+  output identical (`7af1b12`).
+- **Caveats:** s25 only; one T, K, γ, β; arithmetic only; 3 seeds with large seed spread (A: 35.2-55.7%). A's seed 3 came in low partly by
+  selection (the primary cells were chosen on A seeds 1-2). The 11-04 test (above) also had its settling module re-initialized by
+  `--linear-init gpt` (plan Addendum 0); this retest used the intended zero-init.
+- **Closed:** within-token settling has failed two tests (11-04 on val loss, this one on arithmetic with a zero-init readout). The halting
+  follow-up does not run.
+
 ## 2026-11-07 — Retrieval gate, answer entropy, multi-turn step A (pre-registered; gate G1 and history adopted, with caveats)
 
 - **Design** (`experiments/plans/retrieval_gate.md`, frozen before code; deviations listed there under "Changes after freezing"). Three signals per

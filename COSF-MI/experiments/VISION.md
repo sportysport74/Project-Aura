@@ -116,6 +116,13 @@ is noise (see the heartbeat control story in `CLAUDE.md`).
 > is **across tokens** or **input-adaptive in depth** (halting), tested on a task that needs multi-step reasoning, not on val loss.
 > **Retest rule (Jon, 2026-11-04): retest settling only with a zero-init readout (so the module starts as an exact no-op) and on a
 > multi-step reasoning task, not on val loss.**
+>
+> **CLOSED 2026-11-09: within-token settling failed two fair tests** (11-04 on val loss; 11-09 retest on arithmetic with a zero-init readout,
+> pre-registered, 3 seeds, RESULTS.md). Settling (T = 8) scored 37.7% on the primary arithmetic cells vs 46.2% for plain vanilla2 at a
+> quarter of the compute and 62.9% for a compute-matched deeper vanilla2 (L27); it beat only the weight-tied repeat control (27.5%). The
+> module was used (W_out grew from 0) and its dynamics were mild (partial sync R ≈ 0.15-0.3, λ near 0), so it didn't fail by blowing up.
+> The halting follow-up doesn't run. **Depth helps at matched compute** (L27 beat every arm on every primary cell and seed), **but
+> parameters are confounded** (L27 has 2.1× the parameters), so that's not yet a depth-vs-size result. Untested so far: settling across tokens.
 
 The source doc for this section didn't come through (2026-10-31): this is written from Jon's notes plus AKOrN as published. Add the
 doc's own claims under "Claims" when it's available.
